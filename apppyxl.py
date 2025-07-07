@@ -30,7 +30,7 @@ st.set_page_config(
     menu_items={"Report a bug": None, "About": None},
 )
 
-st.title("🚢 Ship Estimator – Powered by FuelTrust (openpyxl edition)")
+st.title("🚢 Ship Estimator – Powered by FuelTrust)
 
 # ----------------------------------------------------------------------------
 # Excel path – using your original absolute Windows path for local runs
@@ -52,6 +52,12 @@ def load_model(path: Path):
     return wb, ev
 
 wb, ev = load_model(EXCEL_PATH)
+# --- quick probe -------------------------------------------------
+probe_cells = ["E6", "E7", "E11"]          # pick a few result cells
+for c in probe_cells:
+    st.write("DEBUG", c, "→", get_value(c))
+# -----------------------------------------------------------------
+
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
 
