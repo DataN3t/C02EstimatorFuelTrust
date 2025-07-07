@@ -52,9 +52,10 @@ def load_model(path: Path):
     return wb, ev
 
 # ----------------------------------------------------------------------------
-# Load workbook + xlcalculator evaluator
+# Load workbook + evaluator
 # ----------------------------------------------------------------------------
 wb, ev = load_model(EXCEL_PATH)
+ev.recalculate()  # make sure all formulas have an initial value
 
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
@@ -65,7 +66,6 @@ lookup_sheet = wb["LookupTables"]
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def set_value(cell, value):
-    """Write to workbook, update xlcalculator, and recalc formulas."""
     ship_sheet[cell].value = value
     ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
     ev.recalculate()
@@ -73,16 +73,11 @@ def set_value(cell, value):
 def get_value(cell):
     return ev.evaluate(xl_addr("Ship Estimator", cell))
 
-# ----------------------------------------------------------------------------
-# Quick DEBUG probe (optional, can delete later)
-# ----------------------------------------------------------------------------
+# --- quick probe -------------------------------------------------
 probe_cells = ["E6", "E7", "E11"]
 for c in probe_cells:
-    try:
-        val = get_value(c)
-        st.write(f"🔍 DEBUG {c} → {val}")
-    except Exception as e:
-        st.error(f"⚠️ Failed reading {c}: {e}")
+    st.write(f"🔍 DEBUG {c} → {get_value(c)}")
+# -----------------------------------------------------------------
 
 
 
