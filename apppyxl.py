@@ -52,11 +52,6 @@ def load_model(path: Path):
     return wb, ev
 
 wb, ev = load_model(EXCEL_PATH)
-# --- quick probe -------------------------------------------------
-probe_cells = ["E6", "E7", "E11"]          # pick a few result cells
-for c in probe_cells:
-    st.write("DEBUG", c, "→", get_value(c))
-# -----------------------------------------------------------------
 
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
@@ -67,10 +62,22 @@ lookup_sheet = wb["LookupTables"]
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def set_value(cell, value):
+    """Write to workbook, update xlcalculator, and recalc dependencies."""
     ship_sheet[cell].value = value
     ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
+    ev.recalculate()                      # keep all formulas up to date
 
 get_value = lambda cell: ev.evaluate(xl_addr("Ship Estimator", cell))
+
+# --- quick probe -------------------------------------------------
+probe_cells = ["E6", "E7", "E11"]  # pick a few result cells
+for c in probe_cells:
+    try:
+        st.write(f"🔍 DEBUG {c} → {get_value(c)}")
+    except Exception as e:
+        st.error(f"⚠️ Error reading {c}: {e}")
+# -----------------------------------------------------------------
+
 
 # ----------------------------------------------------------------------------
 # Safe metric helper
