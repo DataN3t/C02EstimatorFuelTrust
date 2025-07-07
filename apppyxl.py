@@ -173,15 +173,31 @@ if fuel_type != current_fuel:
     set_value("B19", fuel_type)
 
 # Average CO₂ Overage & Fraud -----------------------------------------------
-co2_over_pct = (ship_sheet["B21"].value or 0) * 100
-new_co2_over = st.sidebar.number_input("Average CO₂ Overage (%)", value=co2_over_pct)
+# co2_over_pct = (ship_sheet["B21"].value or 0) * 100
+# new_co2_over = st.sidebar.number_input("Average CO₂ Overage (%)", value=co2_over_pct)
+# if new_co2_over != co2_over_pct:
+#     set_value("B21", new_co2_over / 100)
+
+# fraud_pct = (ship_sheet["B23"].value or 0) * 100
+# new_fraud = st.sidebar.number_input("Average Fraud (Conservative) (%)", value=fraud_pct)
+# if new_fraud != fraud_pct:
+#     set_value("B23", new_fraud / 100)
+
+# Average CO₂ Overage & Fraud -----------------------------------------------
+co2_over_pct = (get_value("B21") or 0) * 100
+new_co2_over = st.sidebar.number_input(
+    "Average CO₂ Overage (%)", value=float(co2_over_pct), min_value=0.0
+)
 if new_co2_over != co2_over_pct:
     set_value("B21", new_co2_over / 100)
 
-fraud_pct = (ship_sheet["B23"].value or 0) * 100
-new_fraud = st.sidebar.number_input("Average Fraud (Conservative) (%)", value=fraud_pct)
+fraud_pct = (get_value("B23") or 0) * 100
+new_fraud = st.sidebar.number_input(
+    "Average Fraud (Conservative) (%)", value=float(fraud_pct), min_value=0.0
+)
 if new_fraud != fraud_pct:
     set_value("B23", new_fraud / 100)
+
 
 # ----------------------------------------------------------------------------
 # Live EUA price fetch -------------------------------------------------------
