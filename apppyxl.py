@@ -231,7 +231,9 @@ def get_live_eua_price():
         )
         headers = {"User-Agent": "Mozilla/5.0"}
         soup = BeautifulSoup(requests.get(url, headers=headers, timeout=10).text, "html.parser")
-        price_text = soup.find("td", text="2021-2030").find_next("td").text.strip()
+        # price_text = soup.find("td", text="2021-2030").find_next("td").text.strip()
+        price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
+
         return float(price_text.replace(",", "."))
     except Exception:
         return None
