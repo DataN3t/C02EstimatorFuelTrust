@@ -51,36 +51,38 @@ def load_model(path: Path):
     ev = Evaluator(model)
     return wb, ev
 
-# -------------------------------------------------------------
-#  Load workbook + evaluator
-# -------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Load workbook + xlcalculator evaluator
+# ----------------------------------------------------------------------------
 wb, ev = load_model(EXCEL_PATH)
 
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
 
-# -------------------------------------------------------------
-#  Excel <-> xlcalculator helpers
-# -------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Excel <--> xlcalculator helpers
+# ----------------------------------------------------------------------------
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def set_value(cell, value):
-    """Write to workbook, update xlcalculator, and recalc dependencies."""
+    """Write to workbook, update xlcalculator, and recalc formulas."""
     ship_sheet[cell].value = value
     ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
-    ev.recalculate()                          # keep formulas up to date
+    ev.recalculate()
 
 def get_value(cell):
     return ev.evaluate(xl_addr("Ship Estimator", cell))
 
-# --- quick probe (diagnostics) --------------------------------
+# ----------------------------------------------------------------------------
+# Quick DEBUG probe (optional, can delete later)
+# ----------------------------------------------------------------------------
 probe_cells = ["E6", "E7", "E11"]
 for c in probe_cells:
     try:
-        st.write(f"🔍 DEBUG {c} → {get_value(c)}")
+        val = get_value(c)
+        st.write(f"🔍 DEBUG {c} → {val}")
     except Exception as e:
-        st.error(f"⚠️ Error reading {c}: {e}")
-# -------------------------------------------------------------
+        st.error(f"⚠️ Failed reading {c}: {e}")
 
 
 
