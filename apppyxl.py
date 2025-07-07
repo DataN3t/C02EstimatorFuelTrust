@@ -35,9 +35,9 @@ st.title("🚢 Ship Estimator – Powered by FuelTrust (openpyxl edition)")
 # ----------------------------------------------------------------------------
 # Excel path – using your original absolute Windows path for local runs
 # ----------------------------------------------------------------------------
-EXCEL_PATH = Path(r"C:\Users\jhhkn\Desktop\Study-Courses\GenerativeAICourseLangchainHuggingface\Code\CO2EmissionsEstimator3.xlsx")
+EXCEL_PATH = Path("CO2EmissionsEstimator3.xlsx")
 if not EXCEL_PATH.exists():
-    st.error(f"❌ Excel file not found at: {EXCEL_PATH}")
+    st.error("❌ Excel file not found in repo directory.")
     st.stop()
 
 # ----------------------------------------------------------------------------
