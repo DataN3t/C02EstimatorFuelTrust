@@ -74,14 +74,14 @@ def set_value(cell, value):
 
 get_value = lambda cell: ev.evaluate(xl_addr("Ship Estimator", cell))
 
-# --- DEBUG probe -------------------------------------------------
-probe_cells = ["E6", "E7", "E11"]
-for c in probe_cells:
-    try:
-        val = get_value(c)
-        st.write(f"🔍 DEBUG {c} →", val)
-    except Exception as e:
-        st.error(f"⚠️ Error while evaluating {c}: {e}")
+# # --- DEBUG probe -------------------------------------------------
+# probe_cells = ["E6", "E7", "E11"]
+# for c in probe_cells:
+#     try:
+#         val = get_value(c)
+#         st.write(f"🔍 DEBUG {c} →", val)
+#     except Exception as e:
+#         st.error(f"⚠️ Error while evaluating {c}: {e}")
 # -----------------------------------------------------------------
 
 
