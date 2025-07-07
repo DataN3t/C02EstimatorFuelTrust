@@ -86,7 +86,8 @@ def safe_metric(label, value, prefix=""):
 st.sidebar.header("Adjust Estimator Inputs")
 
 # Ship Type dropdown ---------------------------------------------------------
-ship_type_list = [c.value for c in lookup_sheet["A2":"A"] if c[0].value]
+# ship_type_list = [c.value for c in lookup_sheet["A2":"A"] if c[0].value]
+ship_type_list = [cell.value for cell in lookup_sheet["A"][1:] if cell.value]
 current_ship_type = ship_sheet["B6"].value
 selected_ship_type = st.sidebar.selectbox(
     "Ship Type",
