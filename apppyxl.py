@@ -77,9 +77,15 @@ get_value = lambda cell: ev.evaluate(xl_addr("Ship Estimator", cell))
 # ----------------------------------------------------------------------------
 # DEBUG – Optional, remove once working
 # ----------------------------------------------------------------------------
+from xlcalculator.error_handler import FormulaError
+
 probe_cells = ["E6", "E7", "E11"]
 for c in probe_cells:
-    st.write(f"🔍 DEBUG {c} →", get_value(c))
+    try:
+        val = get_value(c)
+        st.write(f"🔍 DEBUG {c} →", val)
+    except FormulaError as fe:
+        st.error(f"⚠️ FormulaError in {fe.address}: {fe}")
 
 
 # ----------------------------------------------------------------------------
