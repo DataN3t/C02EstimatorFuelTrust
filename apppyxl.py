@@ -30,7 +30,7 @@ st.set_page_config(
     menu_items={"Report a bug": None, "About": None},
 )
 
-st.title("🚢 Ship Estimator – Powered by FuelTrust)
+st.title("🚢 Ship Estimator – Powered by FuelTrust")
 
 # ----------------------------------------------------------------------------
 # Excel path – using your original absolute Windows path for local runs
