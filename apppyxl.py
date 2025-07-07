@@ -75,19 +75,24 @@ def set_value(cell, value):
 get_value = lambda cell: ev.evaluate(xl_addr("Ship Estimator", cell))
 
 # # --- DEBUG probe -------------------------------------------------
-# probe_cells = ["E6", "E7", "E11"]
-# for c in probe_cells:
-#     try:
-#         val = get_value(c)
-#         st.write(f"🔍 DEBUG {c} →", val)
-#     except Exception as e:
-#         st.error(f"⚠️ Error while evaluating {c}: {e}")
-# -----------------------------------------------------------------
-
+# ----------------------------------------------------------------------------
+# Debug probe – remove after troubleshooting
+# ----------------------------------------------------------------------------
+st.subheader("🔎 Formula debug (temporary)")
+check_cells = ["E6", "E7", "E11", "E13"]   # add or remove addresses as needed
+for addr in check_cells:
+    try:
+        val = get_value(addr)
+        st.write(addr, "=", val)
+    except Exception as e:
+        st.error(f"{addr} ➜ {e}")
 
 # ----------------------------------------------------------------------------
-# Safe metric helper
+# Results --------------------------------------------------------------------
 # ----------------------------------------------------------------------------
+st.subheader("📊 Estimator Results")
+col1, col2 = st.columns(2)
+
 
 def safe_metric(label, value, prefix=""):
     if value is None:
