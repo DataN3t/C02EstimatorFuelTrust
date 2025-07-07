@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 # Configuration
 # ----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="CO₂ Estimator",
+    page_title="FuelTrust CO₂ Ship Estimator",
     layout="wide",
     menu_items={"Report a bug": None, "About": None},
 )
@@ -262,11 +262,11 @@ metrics_col2 = {
     "Annex‑II CO₂ Emissions (2025 onward)": "E13",
     "Measured CO₂e Estimate": "E14",
     "Measured CO₂e Reduction": "E15",
-    "SAVINGS € in 2025": "E19",
-    "SAVINGS € in 2026": "E20",
-    "SAVINGS € in 2027": "E21",
-    "SAVINGS € in 2028": "E22",
-    "Average Fraud Savings / yr": "E25",
+    "SAVINGS € in 2025": "E16",
+    "SAVINGS € in 2026": "E17",
+    "SAVINGS € in 2027": "E18",
+    "SAVINGS € in 2028": "E19",
+    "Average Fraud Savings / yr": "E21",
 }
 
 with col1:
