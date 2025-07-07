@@ -98,6 +98,22 @@ if selected_ship_type != current_ship_type:
     set_value("B6", selected_ship_type)
 
 # Numeric inputs -------------------------------------------------------------
+# num_inputs = {
+#     "B7": "Average nm / SEA Day",
+#     "B8": "Average nm / PORT Day",
+#     "B10": "Avg SEA Fuel use (MT)",
+#     "B11": "Avg PORT Fuel use (MT)",
+#     "B16": "SEA DAYS",
+#     "B17": "PORT DAYS",
+#     "B18": "Annual AVG NM",
+# }
+# for cell, label in num_inputs.items():
+#     default = ship_sheet[cell].value or 0.0
+#     new_val = st.sidebar.number_input(label, value=float(default))
+#     if new_val != default:
+#         set_value(cell, new_val)
+
+# Numeric inputs -------------------------------------------------------------
 num_inputs = {
     "B7": "Average nm / SEA Day",
     "B8": "Average nm / PORT Day",
@@ -107,26 +123,46 @@ num_inputs = {
     "B17": "PORT DAYS",
     "B18": "Annual AVG NM",
 }
+
 for cell, label in num_inputs.items():
-    default = ship_sheet[cell].value or 0.0
-    new_val = st.sidebar.number_input(label, value=float(default))
-    if new_val != default:
+    default_val = get_value(cell)            # evaluated numeric result
+    if default_val is None:
+        default_val = 0.0
+    new_val = st.sidebar.number_input(label, value=float(default_val))
+    if new_val != default_val:
         set_value(cell, new_val)
 
+
+
 # Percentage sliders ---------------------------------------------------------
+# slider_inputs = {
+#     "B12": "% of Voyages EU to EU",
+#     "B13": "% of Voyages in/out of EU",
+#     "B14": "Non‑EU % of Voyages",
+# }
+# for cell, label in slider_inputs.items():
+#     pct_default = ship_sheet[cell].value or 0
+#     new_pct = st.sidebar.slider(label, 0, 100, int(pct_default))
+#     if new_pct != pct_default:
+#         set_value(cell, new_pct)
+
 slider_inputs = {
     "B12": "% of Voyages EU to EU",
     "B13": "% of Voyages in/out of EU",
-    "B14": "Non‑EU % of Voyages",
+    "B14": "Non-EU % of Voyages",
 }
+
 for cell, label in slider_inputs.items():
-    pct_default = ship_sheet[cell].value or 0
+    pct_default = get_value(cell) or 0
     new_pct = st.sidebar.slider(label, 0, 100, int(pct_default))
     if new_pct != pct_default:
         set_value(cell, new_pct)
 
+
 # Fuel type dropdown ---------------------------------------------------------
-fuel_options = [c.value for c in lookup_sheet["A43":"A64"] if c[0].value]
+# fuel_options = [c.value for c in lookup_sheet["A43":"A64"] if c[0].value]
+fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
+
 current_fuel = ship_sheet["B19"].value
 fuel_type = st.sidebar.selectbox(
     "Default SEA Fuel Type",
