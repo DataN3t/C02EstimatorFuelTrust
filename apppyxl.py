@@ -1,8 +1,8 @@
 # app_openpyxl.py
 """
-Streamlit CO₂ Estimator – cloud‑ready
-• openpyxl          → loads workbook (.xlsx)
-• xlcalculator      → live recalculation when possible (fallback to static values)
+Streamlit CO₂ Estimator – cloud-ready
+• openpyxl  → loads workbook (.xlsx)
+• xlcalculator → live recalculation when possible (fallback to static values)
 """
 
 # ── Imports ────────────────────────────────────────────────────────────────
@@ -14,10 +14,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # ── Streamlit config ───────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="FuelTrust CO₂ Ship Estimator",
-    layout="wide"
-)
+st.set_page_config(page_title="FuelTrust CO₂ Ship Estimator", layout="wide")
 st.title("🚢 Ship Estimator – Powered by FuelTrust")
 
 # ── Excel workbook path ────────────────────────────────────────────────────
@@ -42,16 +39,28 @@ lookup_sheet = wb["LookupTables"]
 # ── Helper functions ───────────────────────────────────────────────────────
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
+def _flatten(val):
+    """Convert [220] or [[220]] → 220 so widgets get a scalar."""
+    while isinstance(val, list) and len(val) == 1:
+        val = val[0]
+    return val
+
 def set_value(cell, value):
     ship_sheet[cell].value = value
     try:
         ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
     except Exception:
-        pass
+        pass  # evaluator may not handle ranges; ignore
 
 def get_value(cell):
+    """
+    1) Try xlcalculator (live).
+    2) Flatten 1-element lists.
+    3) If still non-numeric, fall back to cached value from workbook.
+    """
     try:
         val = ev.evaluate(xl_addr("Ship Estimator", cell))
+        val = _flatten(val)
     except Exception:
         val = None
     if isinstance(val, (int, float)):
@@ -69,7 +78,7 @@ def safe_metric(label, value, prefix=""):
 st.sidebar.header("Adjust Estimator Inputs")
 
 # Ship type dropdown
-ship_type_list = [cell.value for cell in lookup_sheet["A"][1:] if cell.value]
+ship_type_list = [c.value for c in lookup_sheet["A"][1:] if c.value]
 current_ship_type = ship_sheet["B6"].value
 selected_ship_type = st.sidebar.selectbox(
     "Ship Type", ship_type_list,
@@ -96,9 +105,9 @@ for cell, label in num_inputs.items():
 
 # Percentage sliders
 slider_inputs = {
-    "B12": "% Voyages EU‑EU",
+    "B12": "% Voyages EU-EU",
     "B13": "% In/Out EU",
-    "B14": "Non‑EU %",
+    "B14": "Non-EU %",
 }
 for cell, label in slider_inputs.items():
     pct_default = int(get_value(cell) or 0)
@@ -107,7 +116,7 @@ for cell, label in slider_inputs.items():
         set_value(cell, new_pct)
 
 # Fuel type dropdown
-fuel_options = [r[0].value for r in lookup_sheet["A43:A64"] if r[0].value]
+fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
 current_fuel = ship_sheet["B19"].value
 fuel_type = st.sidebar.selectbox(
     "Default SEA Fuel", fuel_options,
@@ -137,8 +146,9 @@ def get_live_eua_price():
     except Exception:
         return None
 
-live_price = get_live_eua_price()
-sidebar_price = st.sidebar.number_input("Current EUA Price (€)", value=float(live_price or get_value("B26") or 0))
+live_price  = get_live_eua_price()
+sidebar_val = float(live_price or get_value("B26") or 0)
+sidebar_price = st.sidebar.number_input("Current EUA Price (€)", value=sidebar_val)
 if sidebar_price != get_value("B26"):
     set_value("B26", sidebar_price)
 
@@ -156,7 +166,7 @@ metrics_col1 = {
     "EU Eligible CO₂ Reductions": "E12",
 }
 metrics_col2 = {
-    "Annex‑II CO₂ (2025→)": "E13",
+    "Annex-II CO₂ (2025→)": "E13",
     "Measured CO₂e Estimate": "E14",
     "Measured CO₂e Reduction": "E15",
     "SAVINGS € 2025": "E16",
