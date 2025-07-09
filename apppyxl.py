@@ -39,7 +39,7 @@ if not EXCEL_PATH.exists():
 # ----------------------------------------------------------------------------
 @st.cache_resource(show_spinner="Loading Excel model…")
 def load_model(path: Path):
-    wb = load_workbook(path, data_only=False, keep_links=False)
+    wb = load_workbook(path, data_only=True, keep_links=False)
     mc = ModelCompiler()
     model = mc.read_and_parse_archive(str(path))
     ev = Evaluator(model)
@@ -56,7 +56,10 @@ xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def set_value(cell, value):
     ship_sheet[cell].value = value
-    ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
+    try:
+        ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
+    except Exception:
+        pass  # silent fallback if model parsing is incomplete
 
 def get_value(cell):
     """Try xlcalculator; if it returns None/error, fall back to cached value."""
@@ -69,20 +72,21 @@ def get_value(cell):
         return ship_sheet[cell].value
 
 # ----------------------------------------------------------------------------
-# Debug probes (temporary)
+# Debug probes (temporary – collapsible)
 # ----------------------------------------------------------------------------
-st.subheader("🔎 Formula debug (temporary)")
-for addr in ["E6", "E7", "E11", "E13"]:
-    try:
-        st.write(addr, "=", get_value(addr))
-    except Exception as e:
-        st.error(f"{addr} ➜ {e}")
+with st.expander("🔎 Formula Debug (temporary)", expanded=False):
+    for addr in ["E6", "E7", "E11", "E13"]:
+        try:
+            st.write(f"{addr} =", get_value(addr))
+        except Exception as e:
+            st.error(f"{addr} ➜ {e}")
 
-st.subheader("⚙️ Raw Evaluation Test")
-try:
-    st.write("B6 =", ev.evaluate("'Ship Estimator'!B6"))
-except Exception as e:
-    st.error(f"Failed evaluating B6: {e}")
+    st.markdown("---")
+    st.subheader("⚙️ Raw Evaluation Test")
+    try:
+        st.write("B6 =", ev.evaluate("'Ship Estimator'!B6"))
+    except Exception as e:
+        st.error(f"Failed evaluating B6: {e}")
 
 # ----------------------------------------------------------------------------
 # Safe metric helper
@@ -121,9 +125,12 @@ num_inputs = {
 }
 for cell, label in num_inputs.items():
     default_val = get_value(cell) or 0.0
-    new_val = st.sidebar.number_input(label, value=float(default_val))
-    if new_val != default_val:
-        set_value(cell, new_val)
+    try:
+        new_val = st.sidebar.number_input(label, value=float(default_val))
+        if new_val != default_val:
+            set_value(cell, new_val)
+    except Exception:
+        st.sidebar.warning(f"⚠️ Could not load value for {label}")
 
 # Percentage sliders
 slider_inputs = {
@@ -133,9 +140,12 @@ slider_inputs = {
 }
 for cell, label in slider_inputs.items():
     pct_default = get_value(cell) or 0
-    new_pct = st.sidebar.slider(label, 0, 100, int(pct_default))
-    if new_pct != pct_default:
-        set_value(cell, new_pct)
+    try:
+        new_pct = st.sidebar.slider(label, 0, 100, int(pct_default))
+        if new_pct != pct_default:
+            set_value(cell, new_pct)
+    except Exception:
+        st.sidebar.warning(f"⚠️ Invalid percentage for {label}")
 
 # Fuel type dropdown
 fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
@@ -214,4 +224,7 @@ with col2:
         prefix = "€ " if "€" in label or "SAVINGS" in label else ""
         safe_metric(label, get_value(addr), prefix)
 
+# ----------------------------------------------------------------------------
+# Info placeholder
+# ----------------------------------------------------------------------------
 st.info("📝 Excel charts aren’t displayed in this cloud-version. Replace with a Python chart if needed.")
