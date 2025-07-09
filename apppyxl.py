@@ -1,42 +1,32 @@
 # app_openpyxl.py
 """
-Streamlit CO₂ Estimator – cloud-ready
-Replaces xlwings/Excel-COM dependency with pure-Python stack:
-    • openpyxl         – load the workbook
-    • xlcalculator     – evaluate formulas (with fallback to cached values)
+Streamlit CO₂ Estimator – cloud‑ready
+• openpyxl          → loads workbook (.xlsx)
+• xlcalculator      → live recalculation when possible (fallback to static values)
 """
 
-# ---- Imports --------------------------------------------------------------
-import os
+# ── Imports ────────────────────────────────────────────────────────────────
 from pathlib import Path
 import streamlit as st
 from openpyxl import load_workbook
 from xlcalculator import ModelCompiler, Evaluator
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-# ----------------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------------
+# ── Streamlit config ───────────────────────────────────────────────────────
 st.set_page_config(
     page_title="FuelTrust CO₂ Ship Estimator",
-    layout="wide",
-    menu_items={"Report a bug": None, "About": None},
+    layout="wide"
 )
 st.title("🚢 Ship Estimator – Powered by FuelTrust")
 
-# ----------------------------------------------------------------------------
-# Excel path
-# ----------------------------------------------------------------------------
+# ── Excel workbook path ────────────────────────────────────────────────────
 EXCEL_PATH = Path("CO2EmissionsEstimator3.xlsx")
 if not EXCEL_PATH.exists():
-    st.error("❌ Excel file not found in repo directory.")
+    st.error(f"❌ {EXCEL_PATH} not found.")
     st.stop()
 
-# ----------------------------------------------------------------------------
-# Helper – load workbook + evaluator (cached)
-# ----------------------------------------------------------------------------
+# ── Load workbook + evaluator (cached) ─────────────────────────────────────
 @st.cache_resource(show_spinner="Loading Excel model…")
 def load_model(path: Path):
     wb = load_workbook(path, data_only=True, keep_links=False)
@@ -49,9 +39,7 @@ wb, ev = load_model(EXCEL_PATH)
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
 
-# ----------------------------------------------------------------------------
-# Excel <--> xlcalculator helpers
-# ----------------------------------------------------------------------------
+# ── Helper functions ───────────────────────────────────────────────────────
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def set_value(cell, value):
@@ -59,55 +47,32 @@ def set_value(cell, value):
     try:
         ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
     except Exception:
-        pass  # silent fallback if model parsing is incomplete
+        pass
 
 def get_value(cell):
-    """Try xlcalculator; if it returns None/error, fall back to cached value."""
     try:
         val = ev.evaluate(xl_addr("Ship Estimator", cell))
-        if val in ("", None):
-            val = ship_sheet[cell].value
-        return val
     except Exception:
-        return ship_sheet[cell].value
+        val = None
+    if isinstance(val, (int, float)):
+        return val
+    cached = ship_sheet[cell].value
+    return cached if isinstance(cached, (int, float)) else None
 
-# ----------------------------------------------------------------------------
-# Debug probes (temporary – collapsible)
-# ----------------------------------------------------------------------------
-with st.expander("🔎 Formula Debug (temporary)", expanded=False):
-    for addr in ["E6", "E7", "E11", "E13"]:
-        try:
-            st.write(f"{addr} =", get_value(addr))
-        except Exception as e:
-            st.error(f"{addr} ➜ {e}")
-
-    st.markdown("---")
-    st.subheader("⚙️ Raw Evaluation Test")
-    try:
-        st.write("B6 =", ev.evaluate("'Ship Estimator'!B6"))
-    except Exception as e:
-        st.error(f"Failed evaluating B6: {e}")
-
-# ----------------------------------------------------------------------------
-# Safe metric helper
-# ----------------------------------------------------------------------------
 def safe_metric(label, value, prefix=""):
-    try:
-        st.metric(label, f"{prefix}{float(value):,.2f}")
-    except (TypeError, ValueError):
+    if isinstance(value, (int, float)):
+        st.metric(label, f"{prefix}{value:,.2f}")
+    else:
         st.metric(label, "–")
 
-# ----------------------------------------------------------------------------
-# Sidebar – user inputs
-# ----------------------------------------------------------------------------
+# ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
 
-# Ship Type dropdown
+# Ship type dropdown
 ship_type_list = [cell.value for cell in lookup_sheet["A"][1:] if cell.value]
 current_ship_type = ship_sheet["B6"].value
 selected_ship_type = st.sidebar.selectbox(
-    "Ship Type",
-    ship_type_list,
+    "Ship Type", ship_type_list,
     index=ship_type_list.index(current_ship_type) if current_ship_type in ship_type_list else 0,
 )
 if selected_ship_type != current_ship_type:
@@ -125,75 +90,62 @@ num_inputs = {
 }
 for cell, label in num_inputs.items():
     default_val = get_value(cell) or 0.0
-    try:
-        new_val = st.sidebar.number_input(label, value=float(default_val))
-        if new_val != default_val:
-            set_value(cell, new_val)
-    except Exception:
-        st.sidebar.warning(f"⚠️ Could not load value for {label}")
+    new_val = st.sidebar.number_input(label, value=float(default_val))
+    if new_val != default_val:
+        set_value(cell, new_val)
 
 # Percentage sliders
 slider_inputs = {
-    "B12": "% of Voyages EU to EU",
-    "B13": "% of Voyages in/out of EU",
-    "B14": "Non-EU % of Voyages",
+    "B12": "% Voyages EU‑EU",
+    "B13": "% In/Out EU",
+    "B14": "Non‑EU %",
 }
 for cell, label in slider_inputs.items():
-    pct_default = get_value(cell) or 0
-    try:
-        new_pct = st.sidebar.slider(label, 0, 100, int(pct_default))
-        if new_pct != pct_default:
-            set_value(cell, new_pct)
-    except Exception:
-        st.sidebar.warning(f"⚠️ Invalid percentage for {label}")
+    pct_default = int(get_value(cell) or 0)
+    new_pct = st.sidebar.slider(label, 0, 100, pct_default)
+    if new_pct != pct_default:
+        set_value(cell, new_pct)
 
 # Fuel type dropdown
-fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
+fuel_options = [r[0].value for r in lookup_sheet["A43:A64"] if r[0].value]
 current_fuel = ship_sheet["B19"].value
 fuel_type = st.sidebar.selectbox(
-    "Default SEA Fuel Type",
-    fuel_options,
+    "Default SEA Fuel", fuel_options,
     index=fuel_options.index(current_fuel) if current_fuel in fuel_options else 0,
 )
 if fuel_type != current_fuel:
     set_value("B19", fuel_type)
 
-# Average CO₂ Overage & Fraud
-co2_over_pct = (get_value("B21") or 0) * 100
-new_co2_over = st.sidebar.number_input("Average CO₂ Overage (%)", value=float(co2_over_pct))
+# CO₂ overage and fraud
+co2_over_pct = int((get_value("B21") or 0) * 100)
+new_co2_over = st.sidebar.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0)
 if new_co2_over != co2_over_pct:
     set_value("B21", new_co2_over / 100)
 
-fraud_pct = (get_value("B23") or 0) * 100
-new_fraud = st.sidebar.number_input("Average Fraud (Conservative) (%)", value=float(fraud_pct))
+fraud_pct = int((get_value("B23") or 0) * 100)
+new_fraud = st.sidebar.number_input("Avg Fraud (%)", value=fraud_pct, min_value=0)
 if new_fraud != fraud_pct:
     set_value("B23", new_fraud / 100)
 
-# ----------------------------------------------------------------------------
-# Live EUA price fetch
-# ----------------------------------------------------------------------------
+# ── Live EUA price ─────────────────────────────────────────────────────────
 def get_live_eua_price():
     try:
         url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        soup = BeautifulSoup(requests.get(url, headers=headers, timeout=10).text, "html.parser")
+        soup = BeautifulSoup(requests.get(url, timeout=8).text, "html.parser")
         price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
         return float(price_text.replace(",", "."))
     except Exception:
         return None
 
 live_price = get_live_eua_price()
-def_price = live_price if live_price else ship_sheet["B26"].value or 0
-new_price = st.sidebar.number_input("Current EUA Price (€)", value=float(def_price))
-if new_price != def_price:
-    set_value("B26", new_price)
+sidebar_price = st.sidebar.number_input("Current EUA Price (€)", value=float(live_price or get_value("B26") or 0))
+if sidebar_price != get_value("B26"):
+    set_value("B26", sidebar_price)
 
-# ----------------------------------------------------------------------------
-# Results
-# ----------------------------------------------------------------------------
+# ── Estimator output ───────────────────────────────────────────────────────
 st.subheader("📊 Estimator Results")
-col1, col2 = st.columns(2)
 
+col1, col2 = st.columns(2)
 metrics_col1 = {
     "Average Daily Fuel Use (MT)": "E6",
     "Annex II Emissions CO₂": "E7",
@@ -204,27 +156,22 @@ metrics_col1 = {
     "EU Eligible CO₂ Reductions": "E12",
 }
 metrics_col2 = {
-    "Annex-II CO₂ Emissions (2025 onward)": "E13",
+    "Annex‑II CO₂ (2025→)": "E13",
     "Measured CO₂e Estimate": "E14",
     "Measured CO₂e Reduction": "E15",
-    "SAVINGS € in 2025": "E16",
-    "SAVINGS € in 2026": "E17",
-    "SAVINGS € in 2027": "E18",
-    "SAVINGS € in 2028": "E19",
-    "Average Fraud Savings / yr": "E21",
+    "SAVINGS € 2025": "E16",
+    "SAVINGS € 2026": "E17",
+    "SAVINGS € 2027": "E18",
+    "SAVINGS € 2028": "E19",
+    "Avg Fraud Savings / yr": "E21",
 }
 
 with col1:
-    for label, addr in metrics_col1.items():
-        prefix = "€ " if "€" in label or "Liability" in label else ""
-        safe_metric(label, get_value(addr), prefix)
+    for lbl, adr in metrics_col1.items():
+        safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
 with col2:
-    for label, addr in metrics_col2.items():
-        prefix = "€ " if "€" in label or "SAVINGS" in label else ""
-        safe_metric(label, get_value(addr), prefix)
+    for lbl, adr in metrics_col2.items():
+        safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
-# ----------------------------------------------------------------------------
-# Info placeholder
-# ----------------------------------------------------------------------------
-st.info("📝 Excel charts aren’t displayed in this cloud-version. Replace with a Python chart if needed.")
+st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
