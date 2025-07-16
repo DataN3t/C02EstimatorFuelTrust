@@ -74,6 +74,19 @@ def safe_metric(label, value, prefix=""):
     else:
         st.metric(label, "–")
 
+def get_range_values(range_name):
+    """Fetch values from a named range as a flat list (assuming column/row)."""
+    if range_name not in wb.defined_names:
+        return None
+    defined = wb.defined_names[range_name]
+    values = []
+    for sheet_title, coord in defined.destinations:
+        sheet = wb[sheet_title]
+        for row in sheet[coord]:
+            for cell in row:
+                values.append(cell.value)
+    return values
+
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
 
@@ -86,6 +99,21 @@ selected_ship_type = st.sidebar.selectbox(
 )
 if selected_ship_type != current_ship_type:
     set_value("B6", selected_ship_type)
+    # Update dependent cells via Python lookup (mimics INDEX/MATCH)
+    dependents = {
+        "B7": "SeaDayNM",   # Average nm / SEA Day
+        "B10": "SeaDayMT",  # Avg SEA Fuel use (MT) – assuming based on your example
+        "B8": "PortDayNM",  # Average nm / PORT Day (guessed name – adjust if needed)
+        "B11": "PortDayMT", # Avg PORT Fuel use (MT) (guessed name – adjust if needed)
+        # Add more here if other inputs depend on Ship Type, e.g., "B16": "SomeRange"
+    }
+    ship_index = ship_type_list.index(selected_ship_type)  # 0-based match position
+    for cell, range_name in dependents.items():
+        values = get_range_values(range_name)
+        if values and ship_index < len(values):
+            new_val = values[ship_index]
+            if isinstance(new_val, (int, float)):
+                set_value(cell, new_val)
 
 # Numeric inputs
 num_inputs = {
