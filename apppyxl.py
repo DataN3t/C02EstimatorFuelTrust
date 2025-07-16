@@ -80,41 +80,78 @@ def calculate_fallback(cell):
     sea_days = ship_sheet["B16"].value or 0
     port_days = ship_sheet["B17"].value or 0
     total_days = sea_days + port_days
+    st.write(f"Debug - calculate_fallback({cell}): sea_days={sea_days}, port_days={port_days}, total_days={total_days}")
     if total_days == 0:
         return None
     if cell == "B18":  # Annual AVG NM = SEA DAYS * Avg nm / SEA Day + PORT DAYS * Avg nm / PORT day
-        return (sea_days * (ship_sheet["B7"].value or 0)) + (port_days * (ship_sheet["B8"].value or 0))
+        nm_sea = ship_sheet["B7"].value or 0
+        nm_port = ship_sheet["B8"].value or 0
+        val = (sea_days * nm_sea) + (port_days * nm_port)
+        st.write(f"Debug - B18: {nm_sea} * {sea_days} + {nm_port} * {port_days} = {val}")
+        return val
     if cell == "E6":  # Average Daily Fuel Use (MT) = (SEA Fuel * SEA DAYS + PORT Fuel * PORT DAYS) / total_days
-        return ((ship_sheet["B10"].value or 0) * sea_days + (ship_sheet["B11"].value or 0) * port_days) / total_days
+        fuel_sea = ship_sheet["B10"].value or 0
+        fuel_port = ship_sheet["B11"].value or 0
+        val = (fuel_sea * sea_days + fuel_port * port_days) / total_days
+        st.write(f"Debug - E6: ({fuel_sea} * {sea_days} + {fuel_port} * {port_days}) / {total_days} = {val}")
+        return val
     if cell == "E7":  # Annex II Emissions CO2 = Total fuel * Cf (from fuel type)
         fuel_type = ship_sheet["B19"].value
         cf_row = fuel_options.index(fuel_type) if fuel_type in fuel_options else 0
-        cf = lookup_sheet.cell(row=43 + cf_row, column=2).value  # Cf from A43:B64
+        cf = lookup_sheet.cell(row=43 + cf_row, column=2).value or 0  # Cf from A43:B64
         total_fuel = (ship_sheet["B10"].value or 0) * sea_days + (ship_sheet["B11"].value or 0) * port_days
-        return total_fuel * cf
+        val = total_fuel * cf
+        st.write(f"Debug - E7: {total_fuel} * {cf} = {val}")
+        return val
     if cell == "E8":  # Measured CO2 Estimate = E7 * (1 - B21)
-        return (ship_sheet["E7"].value or 0) * (1 - (ship_sheet["B21"].value or 0))
+        co2_over = ship_sheet["B21"].value or 0
+        val = (ship_sheet["E7"].value or 0) * (1 - co2_over)
+        st.write(f"Debug - E8: {ship_sheet['E7'].value or 0} * (1 - {co2_over}) = {val}")
+        return val
     if cell == "E9":  # CO2 Reduction = E7 - E8
-        return (ship_sheet["E7"].value or 0) - (ship_sheet["E8"].value or 0)
+        val = (ship_sheet["E7"].value or 0) - (ship_sheet["E8"].value or 0)
+        st.write(f"Debug - E9: {ship_sheet['E7'].value or 0} - {ship_sheet['E8'].value or 0} = {val}")
+        return val
     if cell == "E10":  # EU CO2 = E7 * (B12 + B13 * 0.5)
-        return (ship_sheet["E7"].value or 0) * ((ship_sheet["B12"].value or 0) + (ship_sheet["B13"].value or 0) * 0.5)
+        eu_eu_pct = ship_sheet["B12"].value or 0
+        in_out_pct = ship_sheet["B13"].value or 0
+        val = (ship_sheet["E7"].value or 0) * (eu_eu_pct + in_out_pct * 0.5)
+        st.write(f"Debug - E10: {ship_sheet['E7'].value or 0} * ({eu_eu_pct} + {in_out_pct} * 0.5) = {val}")
+        return val
     if cell == "E11":  # EU ETS (2024) Liability = E10 * B26 * 0.4
-        return (ship_sheet["E10"].value or 0) * (ship_sheet["B26"].value or 0) * 0.4
+        eua_price = ship_sheet["B26"].value or 0
+        val = (ship_sheet["E10"].value or 0) * eua_price * 0.4
+        st.write(f"Debug - E11: {ship_sheet['E10'].value or 0} * {eua_price} * 0.4 = {val}")
+        return val
     if cell == "E12":  # EU Eligible CO2 Reductions = E9 * (B12 + B13 * 0.5)
-        return (ship_sheet["E9"].value or 0) * ((ship_sheet["B12"].value or 0) + (ship_sheet["B13"].value or 0) * 0.5)
+        eu_eu_pct = ship_sheet["B12"].value or 0
+        in_out_pct = ship_sheet["B13"].value or 0
+        val = (ship_sheet["E9"].value or 0) * (eu_eu_pct + in_out_pct * 0.5)
+        st.write(f"Debug - E12: {ship_sheet['E9'].value or 0} * ({eu_eu_pct} + {in_out_pct} * 0.5) = {val}")
+        return val
     if cell == "E13":  # Annex-II CO2 (2025→) = E7 * 1.50419
-        return (ship_sheet["E7"].value or 0) * 1.50419
+        val = (ship_sheet["E7"].value or 0) * 1.50419
+        st.write(f"Debug - E13: {ship_sheet['E7'].value or 0} * 1.50419 = {val}")
+        return val
     if cell == "E14":  # Measured CO2e Estimate = E13 * (1 - 0.0412)
-        return (ship_sheet["E13"].value or 0) * (1 - 0.0412)
+        val = (ship_sheet["E13"].value or 0) * (1 - 0.0412)
+        st.write(f"Debug - E14: {ship_sheet['E13'].value or 0} * (1 - 0.0412) = {val}")
+        return val
     if cell == "E15":  # Measured CO2e Reduction = E13 - E14
-        return (ship_sheet["E13"].value or 0) - (ship_sheet["E14"].value or 0)
+        val = (ship_sheet["E13"].value or 0) - (ship_sheet["E14"].value or 0)
+        st.write(f"Debug - E15: {ship_sheet['E13'].value or 0} - {ship_sheet['E14'].value or 0} = {val}")
+        return val
     if cell in ["E16", "E17", "E18", "E19"]:  # Savings € 2025-2028 = E15 * EUA price * liability %
         year = {"E16": 2025, "E17": 2026, "E18": 2027, "E19": 2028}[cell]
         liability_pct = [0.4, 0.7, 1.0, 1.0][year - 2025]
         eua = ship_sheet["B26"].value or 67.6
-        return (ship_sheet["E15"].value or 0) * eua * liability_pct
+        val = (ship_sheet["E15"].value or 0) * eua * liability_pct
+        st.write(f"Debug - {cell}: {ship_sheet['E15'].value or 0} * {eua} * {liability_pct} = {val}")
+        return val
     if cell == "E21":  # Avg Fraud Savings / yr = E7 * B23 * B26
-        return (ship_sheet["E7"].value or 0) * (ship_sheet["B23"].value or 0) * (ship_sheet["B26"].value or 0)
+        val = (ship_sheet["E7"].value or 0) * (ship_sheet["B23"].value or 0) * (ship_sheet["B26"].value or 0)
+        st.write(f"Debug - E21: {ship_sheet['E7'].value or 0} * {ship_sheet['B23'].value or 0} * {ship_sheet['B26'].value or 0} = {val}")
+        return val
     return None
 
 def safe_metric(label, value, prefix=""):
