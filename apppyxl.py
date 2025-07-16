@@ -172,100 +172,105 @@ def get_range_values(range_name):
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
 
-# Ship type dropdown
-ship_type_list = [c.value for c in lookup_sheet["A"][1:39] if c.value]
-current_ship_type = ship_sheet["B6"].value
-selected_ship_type = st.sidebar.selectbox(
-    "Ship Type", ship_type_list,
-    index=ship_type_list.index(current_ship_type) if current_ship_type in ship_type_list else 0,
-)
-if selected_ship_type != current_ship_type:
-    set_value("B6", selected_ship_type)
-    # Update dependent cells via Python lookup (mimics INDEX/MATCH)
-    dependents = {
-        "B7": "SeaDayNM",   # Average nm / SEA Day
-        "B8": "PortDayNM",  # Average nm / PORT Day
-        "B10": "SeaDayMT",  # Avg SEA Fuel use (MT)
-        "B11": "PortDayMT", # Avg PORT Fuel use (MT)
-        "B16": "SeaDays",   # SEA DAYS
-        "B17": "PortDays",  # PORT DAYS
+# Use a form to batch inputs and update only on refresh button
+with st.sidebar.form(key="estimator_form"):
+    # Ship type dropdown
+    ship_type_list = [c.value for c in lookup_sheet["A"][1:39] if c.value]
+    current_ship_type = ship_sheet["B6"].value
+    selected_ship_type = st.selectbox(
+        "Ship Type", ship_type_list,
+        index=ship_type_list.index(current_ship_type) if current_ship_type in ship_type_list else 0,
+    )
+    if selected_ship_type != current_ship_type:
+        set_value("B6", selected_ship_type)
+        # Update dependent cells via Python lookup (mimics INDEX/MATCH)
+        dependents = {
+            "B7": "SeaDayNM",   # Average nm / SEA Day
+            "B8": "PortDayNM",  # Average nm / PORT Day
+            "B10": "SeaDayMT",  # Avg SEA Fuel use (MT)
+            "B11": "PortDayMT", # Avg PORT Fuel use (MT)
+            "B16": "SeaDays",   # SEA DAYS
+            "B17": "PortDays",  # PORT DAYS
+        }
+        ship_index = ship_type_list.index(selected_ship_type)
+        for cell, range_name in dependents.items():
+            values = get_range_values(range_name)
+            if values and ship_index < len(values):
+                new_val = values[ship_index]
+                if isinstance(new_val, (int, float)):
+                    set_value(cell, new_val)
+        # Trigger fallback for B18
+        set_value("B18", calculate_fallback("B18"))
+
+    # Numeric inputs - add on_change to trigger recalcs
+    num_inputs = {
+        "B7": "Average nm / SEA Day",
+        "B8": "Average nm / PORT Day",
+        "B10": "Avg SEA Fuel use (MT)",
+        "B11": "Avg PORT Fuel use (MT)",
+        "B16": "SEA DAYS",
+        "B17": "PORT DAYS",
+        "B18": "Annual AVG NM",
     }
-    ship_index = ship_type_list.index(selected_ship_type)
-    for cell, range_name in dependents.items():
-        values = get_range_values(range_name)
-        if values and ship_index < len(values):
-            new_val = values[ship_index]
-            if isinstance(new_val, (int, float)):
-                set_value(cell, new_val)
-    # Trigger fallback for B18
-    set_value("B18", calculate_fallback("B18"))
+    for cell, label in num_inputs.items():
+        default_val = get_value(cell) or 0.0
+        new_val = st.number_input(label, value=float(default_val))
+        if new_val != default_val:
+            set_value(cell, new_val)
+            if cell in ["B7", "B8", "B16", "B17"]:  # Recalc B18 if these change
+                set_value("B18", calculate_fallback("B18"))
 
-# Numeric inputs - add on_change to trigger recalcs
-num_inputs = {
-    "B7": "Average nm / SEA Day",
-    "B8": "Average nm / PORT Day",
-    "B10": "Avg SEA Fuel use (MT)",
-    "B11": "Avg PORT Fuel use (MT)",
-    "B16": "SEA DAYS",
-    "B17": "PORT DAYS",
-    "B18": "Annual AVG NM",
-}
-for cell, label in num_inputs.items():
-    default_val = get_value(cell) or 0.0
-    new_val = st.sidebar.number_input(label, value=float(default_val))
-    if new_val != default_val:
-        set_value(cell, new_val)
-        if cell in ["B7", "B8", "B16", "B17"]:  # Recalc B18 if these change
-            set_value("B18", calculate_fallback("B18"))
+    # Percentage sliders
+    slider_inputs = {
+        "B12": "% Voyages EU-EU",
+        "B13": "% In/Out EU",
+        "B14": "Non-EU %",
+    }
+    for cell, label in slider_inputs.items():
+        pct_default = int((get_value(cell) or 0) * 100)
+        new_pct = st.slider(label, 0, 100, pct_default)
+        if new_pct != pct_default:
+            set_value(cell, new_pct / 100)
 
-# Percentage sliders
-slider_inputs = {
-    "B12": "% Voyages EU-EU",
-    "B13": "% In/Out EU",
-    "B14": "Non-EU %",
-}
-for cell, label in slider_inputs.items():
-    pct_default = int((get_value(cell) or 0) * 100)
-    new_pct = st.sidebar.slider(label, 0, 100, pct_default)
-    if new_pct != pct_default:
-        set_value(cell, new_pct / 100)
+    # Fuel type dropdown
+    fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
+    current_fuel = ship_sheet["B19"].value
+    fuel_type = st.selectbox(
+        "Default SEA Fuel", fuel_options,
+        index=fuel_options.index(current_fuel) if current_fuel in fuel_options else 0,
+    )
+    if fuel_type != current_fuel:
+        set_value("B19", fuel_type)
 
-# Fuel type dropdown
-fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
-current_fuel = ship_sheet["B19"].value
-fuel_type = st.sidebar.selectbox(
-    "Default SEA Fuel", fuel_options,
-    index=fuel_options.index(current_fuel) if current_fuel in fuel_options else 0,
-)
-if fuel_type != current_fuel:
-    set_value("B19", fuel_type)
+    # CO₂ overage and fraud
+    co2_over_pct = int((get_value("B21") or 0) * 100)
+    new_co2_over = st.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0)
+    if new_co2_over != co2_over_pct:
+        set_value("B21", new_co2_over / 100)
 
-# CO₂ overage and fraud
-co2_over_pct = int((get_value("B21") or 0) * 100)
-new_co2_over = st.sidebar.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0)
-if new_co2_over != co2_over_pct:
-    set_value("B21", new_co2_over / 100)
+    fraud_pct = int((get_value("B23") or 0) * 100)
+    new_fraud = st.number_input("Avg Fraud (%)", value=fraud_pct, min_value=0)
+    if new_fraud != fraud_pct:
+        set_value("B23", new_fraud / 100)
 
-fraud_pct = int((get_value("B23") or 0) * 100)
-new_fraud = st.sidebar.number_input("Avg Fraud (%)", value=fraud_pct, min_value=0)
-if new_fraud != fraud_pct:
-    set_value("B23", new_fraud / 100)
+    # ── Live EUA price ─────────────────────────────────────────────────────────
+    def get_live_eua_price():
+        try:
+            url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
+            soup = BeautifulSoup(requests.get(url, timeout=8).text, "html.parser")
+            price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
+            return float(price_text.replace(",", "."))
+        except Exception:
+            return None
 
-# ── Live EUA price ─────────────────────────────────────────────────────────
-def get_live_eua_price():
-    try:
-        url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
-        soup = BeautifulSoup(requests.get(url, timeout=8).text, "html.parser")
-        price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
-        return float(price_text.replace(",", "."))
-    except Exception:
-        return None
+    live_price  = get_live_eua_price()
+    sidebar_val = float(live_price or get_value("B26") or 67.6)
+    sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_val)
+    if sidebar_price != get_value("B26"):
+        set_value("B26", sidebar_price)
 
-live_price  = get_live_eua_price()
-sidebar_val = float(live_price or get_value("B26") or 67.6)
-sidebar_price = st.sidebar.number_input("Current EUA Price (€)", value=sidebar_val)
-if sidebar_price != get_value("B26"):
-    set_value("B26", sidebar_price)
+    # Refresh button as form submit
+    refresh_button = st.form_submit_button("Refresh")
 
 # ── Estimator output ───────────────────────────────────────────────────────
 st.subheader("📊 Estimator Results")
