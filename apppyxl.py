@@ -26,7 +26,7 @@ if not EXCEL_PATH.exists():
 # ── Load workbook + evaluator (cached) ─────────────────────────────────────
 @st.cache_resource(show_spinner="Loading Excel model…")
 def load_model(path: Path):
-    wb = load_workbook(path, data_only=False, keep_links=False)
+    wb = load_workbook(path, data_only=True, keep_links=False)  # Changed back to data_only=True for calculated values
     mc = ModelCompiler()
     model = mc.read_and_parse_archive(str(path))
     ev = Evaluator(model)
@@ -76,37 +76,45 @@ def get_value(cell):
 
 def calculate_fallback(cell):
     """Python mimic of Excel formulas for outputs if evaluator fails."""
-    # Fetch raw values directly to avoid recursion, with type conversion
-    sea_days = float(ship_sheet["B16"].value or 0)
-    port_days = float(ship_sheet["B17"].value or 0)
+    # Fetch raw values directly to avoid recursion, with safe float conversion
+    def safe_float(cell_key):
+        val = ship_sheet[cell_key].value
+        try:
+            return float(val) if val is not None else 0.0
+        except (ValueError, TypeError):
+            st.write(f"Debug - Safe float error for {cell_key}: value={val}, defaulting to 0.0")
+            return 0.0
+
+    sea_days = safe_float("B16")
+    port_days = safe_float("B17")
     total_days = sea_days + port_days
     st.write(f"Debug - calculate_fallback({cell}): sea_days={sea_days}, port_days={port_days}, total_days={total_days}")
     if total_days == 0:
         return None
     if cell == "B18":  # Annual AVG NM = SEA DAYS * Avg nm / SEA Day + PORT DAYS * Avg nm / PORT day
-        nm_sea = float(ship_sheet["B7"].value or 0)
-        nm_port = float(ship_sheet["B8"].value or 0)
+        nm_sea = safe_float("B7")
+        nm_port = safe_float("B8")
         val = (sea_days * nm_sea) + (port_days * nm_port)
         st.write(f"Debug - B18: {nm_sea} * {sea_days} + {nm_port} * {port_days} = {val}")
         return val
     if cell == "E6":  # Average Daily Fuel Use (MT) = (SEA Fuel * SEA DAYS + PORT Fuel * PORT DAYS) / total_days
-        fuel_sea = float(ship_sheet["B10"].value or 0)
-        fuel_port = float(ship_sheet["B11"].value or 0)
+        fuel_sea = safe_float("B10")
+        fuel_port = safe_float("B11")
         val = (fuel_sea * sea_days + fuel_port * port_days) / total_days
         st.write(f"Debug - E6: ({fuel_sea} * {sea_days} + {fuel_port} * {port_days}) / {total_days} = {val}")
         return val
     if cell == "E7":  # Annex II Emissions CO2 = Total fuel * Cf (from fuel type)
         fuel_type = ship_sheet["B19"].value
         cf_row = fuel_options.index(fuel_type) if fuel_type in fuel_options else 0
-        cf = float(lookup_sheet.cell(row=43 + cf_row, column=2).value or 0)  # Cf from A43:B64
-        total_fuel = (float(ship_sheet["B10"].value or 0) * sea_days + float(ship_sheet["B11"].value or 0) * port_days)
+        cf = safe_float(f" B{43 + cf_row}")  # Cf from LookupTables B43+
+        total_fuel = (safe_float("B10") * sea_days + safe_float("B11") * port_days)
         val = total_fuel * cf
         st.write(f"Debug - E7: {total_fuel} * {cf} = {val}")
         return val
     if cell == "E8":  # Measured CO2 Estimate = E7 * (1 - B21)
-        co2_over = float(str(ship_sheet["B21"].value or "0").replace("%", "")) / 100 if ship_sheet["B21"].value else 0.0
-        st.write(f"Debug - E8: co2_over raw={ship_sheet['B21'].value}, converted={co2_over}")
-        val = (get_value("E7") or 0) * (1 - co2_over)  # Use latest E7
+        co2_over = safe_float("B21")
+        st.write(f"Debug - E8: co2_over={co2_over}")
+        val = (get_value("E7") or 0) * (1 - co2_over)
         st.write(f"Debug - E8: {get_value('E7') or 0} * (1 - {co2_over}) = {val}")
         return val
     if cell == "E9":  # CO2 Reduction = E7 - E8
@@ -114,19 +122,19 @@ def calculate_fallback(cell):
         st.write(f"Debug - E9: {get_value('E7') or 0} - {get_value('E8') or 0} = {val}")
         return val
     if cell == "E10":  # EU CO2 = E7 * (B12 + B13 * 0.5)
-        eu_eu_pct = float(ship_sheet["B12"].value or 0)
-        in_out_pct = float(ship_sheet["B13"].value or 0)
+        eu_eu_pct = safe_float("B12")
+        in_out_pct = safe_float("B13")
         val = (get_value("E7") or 0) * (eu_eu_pct + in_out_pct * 0.5)
         st.write(f"Debug - E10: {get_value('E7') or 0} * ({eu_eu_pct} + {in_out_pct} * 0.5) = {val}")
         return val
     if cell == "E11":  # EU ETS (2024) Liability = E10 * B26 * 0.4
-        eua_price = float(ship_sheet["B26"].value or 0)
+        eua_price = safe_float("B26")
         val = (get_value("E10") or 0) * eua_price * 0.4
         st.write(f"Debug - E11: {get_value('E10') or 0} * {eua_price} * 0.4 = {val}")
         return val
     if cell == "E12":  # EU Eligible CO2 Reductions = E9 * (B12 + B13 * 0.5)
-        eu_eu_pct = float(ship_sheet["B12"].value or 0)
-        in_out_pct = float(ship_sheet["B13"].value or 0)
+        eu_eu_pct = safe_float("B12")
+        in_out_pct = safe_float("B13")
         val = (get_value("E9") or 0) * (eu_eu_pct + in_out_pct * 0.5)
         st.write(f"Debug - E12: {get_value('E9') or 0} * ({eu_eu_pct} + {in_out_pct} * 0.5) = {val}")
         return val
@@ -145,13 +153,15 @@ def calculate_fallback(cell):
     if cell in ["E16", "E17", "E18", "E19"]:  # Savings € 2025-2028 = E15 * EUA price * liability %
         year = {"E16": 2025, "E17": 2026, "E18": 2027, "E19": 2028}[cell]
         liability_pct = [0.4, 0.7, 1.0, 1.0][year - 2025]
-        eua = float(ship_sheet["B26"].value or 67.6)
+        eua = safe_float("B26")
         val = (get_value("E15") or 0) * eua * liability_pct
         st.write(f"Debug - {cell}: {get_value('E15') or 0} * {eua} * {liability_pct} = {val}")
         return val
     if cell == "E21":  # Avg Fraud Savings / yr = E7 * B23 * B26
-        val = (get_value("E7") or 0) * (float(ship_sheet["B23"].value or 0)) * (float(ship_sheet["B26"].value or 0))
-        st.write(f"Debug - E21: {get_value('E7') or 0} * {float(ship_sheet['B23'].value or 0)} * {float(ship_sheet['B26'].value or 0)} = {val}")
+        fraud_pct = safe_float("B23")
+        eua = safe_float("B26")
+        val = (get_value("E7") or 0) * fraud_pct * eua
+        st.write(f"Debug - E21: {get_value('E7') or 0} * {fraud_pct} * {eua} = {val}")
         return val
     return None
 
