@@ -26,7 +26,7 @@ if not EXCEL_PATH.exists():
 # ── Load workbook + evaluator (cached) ─────────────────────────────────────
 @st.cache_resource(show_spinner="Loading Excel model…")
 def load_model(path: Path):
-    wb = load_workbook(path, data_only=True, keep_links=False)  # Changed back to data_only=True for calculated values
+    wb = load_workbook(path, data_only=True, keep_links=False)
     mc = ModelCompiler()
     model = mc.read_and_parse_archive(str(path))
     ev = Evaluator(model)
@@ -69,6 +69,7 @@ def get_value(cell):
     # Fallback to Python calc for key cells
     val = calculate_fallback(cell)
     if val is not None:
+        set_value(cell, val)  # Update sheet with calculated value for chaining
         return val
     # Final fallback to cached
     cached = ship_sheet[cell].value
@@ -77,8 +78,8 @@ def get_value(cell):
 def calculate_fallback(cell):
     """Python mimic of Excel formulas for outputs if evaluator fails."""
     # Fetch raw values directly to avoid recursion, with safe float conversion
-    def safe_float(cell_key):
-        val = ship_sheet[cell_key].value
+    def safe_float(cell_key, sheet=ship_sheet):
+        val = sheet[cell_key].value
         try:
             return float(val) if val is not None else 0.0
         except (ValueError, TypeError):
@@ -106,7 +107,7 @@ def calculate_fallback(cell):
     if cell == "E7":  # Annex II Emissions CO2 = Total fuel * Cf (from fuel type)
         fuel_type = ship_sheet["B19"].value
         cf_row = fuel_options.index(fuel_type) if fuel_type in fuel_options else 0
-        cf = safe_float(f" B{43 + cf_row}")  # Cf from LookupTables B43+
+        cf = safe_float(f"B{43 + cf_row}", sheet=lookup_sheet)  # Cf from LookupTables B43+
         total_fuel = (safe_float("B10") * sea_days + safe_float("B11") * port_days)
         val = total_fuel * cf
         st.write(f"Debug - E7: {total_fuel} * {cf} = {val}")
