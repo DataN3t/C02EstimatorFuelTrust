@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 # ── Streamlit config ───────────────────────────────────────────────────────
 st.set_page_config(page_title="FuelTrust CO₂ Ship Estimator", layout="wide")
-st.title("🚢 Ship Estimator – Powered by FuelTrust")
+st.title("Ship Estimator – Powered by FuelTrust")
 
 # ── Excel workbook path ────────────────────────────────────────────────────
 EXCEL_PATH = Path("CO2EmissionsEstimator3.xlsx")
@@ -273,7 +273,7 @@ with st.sidebar.form(key="estimator_form"):
     refresh_button = st.form_submit_button("Refresh")
 
 # ── Estimator output ───────────────────────────────────────────────────────
-st.subheader("📊 Estimator Results")
+st.subheader("Estimator Results:")
 
 col1, col2 = st.columns(2)
 metrics_col1 = {
@@ -304,4 +304,4 @@ with col2:
     for lbl, adr in metrics_col2.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
-st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
+#st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
