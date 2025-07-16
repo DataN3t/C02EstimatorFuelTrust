@@ -26,7 +26,7 @@ if not EXCEL_PATH.exists():
 # ── Load workbook + evaluator (cached) ─────────────────────────────────────
 @st.cache_resource(show_spinner="Loading Excel model…")
 def load_model(path: Path):
-    wb = load_workbook(path, data_only=False, keep_links=False)  # Changed to data_only=False to access formulas if needed
+    wb = load_workbook(path, data_only=False, keep_links=False)
     mc = ModelCompiler()
     model = mc.read_and_parse_archive(str(path))
     ev = Evaluator(model)
@@ -76,44 +76,45 @@ def get_value(cell):
 
 def calculate_fallback(cell):
     """Python mimic of Excel formulas for outputs if evaluator fails."""
-    sea_days = get_value("B16") or 0
-    port_days = get_value("B17") or 0
+    # Fetch raw values directly to avoid recursion
+    sea_days = ship_sheet["B16"].value or 0
+    port_days = ship_sheet["B17"].value or 0
     total_days = sea_days + port_days
     if total_days == 0:
         return None
     if cell == "B18":  # Annual AVG NM = SEA DAYS * Avg nm / SEA Day + PORT DAYS * Avg nm / PORT day
-        return (sea_days * (get_value("B7") or 0)) + (port_days * (get_value("B8") or 0))
+        return (sea_days * (ship_sheet["B7"].value or 0)) + (port_days * (ship_sheet["B8"].value or 0))
     if cell == "E6":  # Average Daily Fuel Use (MT) = (SEA Fuel * SEA DAYS + PORT Fuel * PORT DAYS) / total_days
-        return ((get_value("B10") or 0) * sea_days + (get_value("B11") or 0) * port_days) / total_days
+        return ((ship_sheet["B10"].value or 0) * sea_days + (ship_sheet["B11"].value or 0) * port_days) / total_days
     if cell == "E7":  # Annex II Emissions CO2 = Total fuel * Cf (from fuel type)
         fuel_type = ship_sheet["B19"].value
         cf_row = fuel_options.index(fuel_type) if fuel_type in fuel_options else 0
         cf = lookup_sheet.cell(row=43 + cf_row, column=2).value  # Cf from A43:B64
-        total_fuel = (get_value("B10") or 0) * sea_days + (get_value("B11") or 0) * port_days
+        total_fuel = (ship_sheet["B10"].value or 0) * sea_days + (ship_sheet["B11"].value or 0) * port_days
         return total_fuel * cf
     if cell == "E8":  # Measured CO2 Estimate = E7 * (1 - B21)
-        return (get_value("E7") or 0) * (1 - (get_value("B21") or 0))
+        return (ship_sheet["E7"].value or 0) * (1 - (ship_sheet["B21"].value or 0))
     if cell == "E9":  # CO2 Reduction = E7 - E8
-        return (get_value("E7") or 0) - (get_value("E8") or 0)
+        return (ship_sheet["E7"].value or 0) - (ship_sheet["E8"].value or 0)
     if cell == "E10":  # EU CO2 = E7 * (B12 + B13 * 0.5)
-        return (get_value("E7") or 0) * ((get_value("B12") or 0) + (get_value("B13") or 0) * 0.5)
-    if cell == "E11":  # EU ETS (2024) Liability = E10 * B26 * 0.4  (assuming 40% for 2024)
-        return (get_value("E10") or 0) * (get_value("B26") or 0) * 0.4
+        return (ship_sheet["E7"].value or 0) * ((ship_sheet["B12"].value or 0) + (ship_sheet["B13"].value or 0) * 0.5)
+    if cell == "E11":  # EU ETS (2024) Liability = E10 * B26 * 0.4
+        return (ship_sheet["E10"].value or 0) * (ship_sheet["B26"].value or 0) * 0.4
     if cell == "E12":  # EU Eligible CO2 Reductions = E9 * (B12 + B13 * 0.5)
-        return (get_value("E9") or 0) * ((get_value("B12") or 0) + (get_value("B13") or 0) * 0.5)
-    if cell == "E13":  # Annex-II CO2 (2025→) = E7 * 1.50419  (CO2e factor from B69)
-        return (get_value("E7") or 0) * 1.50419
-    if cell == "E14":  # Measured CO2e Estimate = E13 * (1 - 0.0412)  (Avg CO2E reduction from B67)
-        return (get_value("E13") or 0) * (1 - 0.0412)
+        return (ship_sheet["E9"].value or 0) * ((ship_sheet["B12"].value or 0) + (ship_sheet["B13"].value or 0) * 0.5)
+    if cell == "E13":  # Annex-II CO2 (2025→) = E7 * 1.50419
+        return (ship_sheet["E7"].value or 0) * 1.50419
+    if cell == "E14":  # Measured CO2e Estimate = E13 * (1 - 0.0412)
+        return (ship_sheet["E13"].value or 0) * (1 - 0.0412)
     if cell == "E15":  # Measured CO2e Reduction = E13 - E14
-        return (get_value("E13") or 0) - (get_value("E14") or 0)
+        return (ship_sheet["E13"].value or 0) - (ship_sheet["E14"].value or 0)
     if cell in ["E16", "E17", "E18", "E19"]:  # Savings € 2025-2028 = E15 * EUA price * liability %
         year = {"E16": 2025, "E17": 2026, "E18": 2027, "E19": 2028}[cell]
-        liability_pct = [0.4, 0.7, 1.0, 1.0][year - 2025]  # From Price Models tab
-        eua = get_value("B26") or 67.6  # Fallback to default
-        return (get_value("E15") or 0) * eua * liability_pct
+        liability_pct = [0.4, 0.7, 1.0, 1.0][year - 2025]
+        eua = ship_sheet["B26"].value or 67.6
+        return (ship_sheet["E15"].value or 0) * eua * liability_pct
     if cell == "E21":  # Avg Fraud Savings / yr = E7 * B23 * B26
-        return (get_value("E7") or 0) * (get_value("B23") or 0) * (get_value("B26") or 0)
+        return (ship_sheet["E7"].value or 0) * (ship_sheet["B23"].value or 0) * (ship_sheet["B26"].value or 0)
     return None
 
 def safe_metric(label, value, prefix=""):
@@ -139,7 +140,7 @@ def get_range_values(range_name):
 st.sidebar.header("Adjust Estimator Inputs")
 
 # Ship type dropdown
-ship_type_list = [c.value for c in lookup_sheet["A"][1:39] if c.value]  # Up to row 39 from Excel
+ship_type_list = [c.value for c in lookup_sheet["A"][1:39] if c.value]
 current_ship_type = ship_sheet["B6"].value
 selected_ship_type = st.sidebar.selectbox(
     "Ship Type", ship_type_list,
@@ -156,7 +157,7 @@ if selected_ship_type != current_ship_type:
         "B16": "SeaDays",   # SEA DAYS
         "B17": "PortDays",  # PORT DAYS
     }
-    ship_index = ship_type_list.index(selected_ship_type)  # 0-based
+    ship_index = ship_type_list.index(selected_ship_type)
     for cell, range_name in dependents.items():
         values = get_range_values(range_name)
         if values and ship_index < len(values):
@@ -228,7 +229,7 @@ def get_live_eua_price():
         return None
 
 live_price  = get_live_eua_price()
-sidebar_val = float(live_price or get_value("B26") or 67.6)  # Fallback to 67.6 if None
+sidebar_val = float(live_price or get_value("B26") or 67.6)
 sidebar_price = st.sidebar.number_input("Current EUA Price (€)", value=sidebar_val)
 if sidebar_price != get_value("B26"):
     set_value("B26", sidebar_price)
