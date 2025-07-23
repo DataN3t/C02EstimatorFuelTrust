@@ -309,10 +309,12 @@ with col2:
 # Add the dynamic CTA at the bottom of the results
 st.markdown("---")
 co2_reduction = get_value("E9") or 0.0
-st.markdown(
-    f"Estimated CO₂ reduction: **{co2_reduction:,.2f}**. "
-    "Would you like to know the exact decarb and in-depth details for your vessel? "
-    "[Click here](https://dk2advisor.com/getintouch)"
-)
+st.markdown("""
+<div style="text-align: center; background-color: #e6f7ff; padding: 20px; border-radius: 10px; border: 1px solid #91d5ff;">
+<h2 style="color: #1890ff;">Estimated CO₂ Reduction: <strong>{co2_reduction:,.2f} MT</strong></h2>
+<p style="font-size: 18px;">Unlock precise decarbonization strategies and in-depth insights tailored for your vessels.</p>
+<a href="https://dk2advisor.com/getintouch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Get in Touch Today</a>
+</div>
+""".format(co2_reduction=co2_reduction), unsafe_allow_html=True)
 
 #st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
