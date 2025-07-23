@@ -313,7 +313,7 @@ co2e_reduction_estimate = get_value("E14") or 0.0
 st.markdown("""
 <div style="text-align: center; background-color: #e6f7ff; padding: 20px; border-radius: 10px; border: 1px solid #91d5ff;">
 <h2 style="color: #1890ff;">Estimated FuelTrust CO₂e Reduction Per Vessel Type: <strong>{co2e_reduction:,.2f} MT</strong></h2>
-<h2 style="color: #1890ff;">Measured CO2e Estimate For Floras CO2e-Offset Calculator Type: <strong>{co2e_reduction_estimate:,.2f} MT</strong></h2>
+<h2 style="color: #1890ff;">Measured CO2e Estimate For Floras CO2e-Offset Calculator Below: <strong>{co2e_reduction_estimate:,.2f} MT</strong></h2>
 <p style="font-size: 18px;">Unlock the exact decarb and in-depth insights tailored for your vessels.</p>
 <a href="https://dk2advisor.com/getintouch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Get in Touch Today</a>
 </div>
