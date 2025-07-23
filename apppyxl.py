@@ -173,7 +173,7 @@ def get_range_values(range_name):
     return values
 
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
-st.sidebar.header("Edit your Estimator Inputs here:")
+st.sidebar.header("Edit Your Inputs Here:")
 
 # Use a form to batch inputs and update only on refresh button
 with st.sidebar.form(key="estimator_form"):
