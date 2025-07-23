@@ -232,6 +232,14 @@ with st.sidebar.form(key="estimator_form"):
         if new_pct != pct_default:
             set_value(cell, new_pct / 100)
 
+    # Add the dynamic CTA here (after the EU-related sliders for relevance)
+    co2_reduction = get_value("E9") or 0.0
+    st.markdown(
+        f"Estimated CO₂ reduction: **{co2_reduction:,.2f}**. "
+        "Would you like to know the exact decarb and in-depth details for your vessel? "
+        "[Click here](https://dk2advisor.com/getintouch)"
+    )
+
     # Fuel type dropdown
     fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
     current_fuel = ship_sheet["B19"].value
