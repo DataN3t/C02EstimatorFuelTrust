@@ -235,14 +235,6 @@ with st.sidebar.form(key="estimator_form"):
         if new_pct != pct_default:
             set_value(cell, new_pct / 100)
 
-    # Add the dynamic CTA here (after the EU-related sliders for relevance)
-    co2_reduction = get_value("E9") or 0.0
-    st.markdown(
-        f"Estimated CO₂ reduction: **{co2_reduction:,.2f}**. "
-        "Would you like to know the exact decarb and in-depth details for your vessel? "
-        "[Click here](https://dk2advisor.com/getintouch)"
-    )
-
     # Fuel type dropdown
     current_fuel = ship_sheet["B19"].value
     fuel_type = st.selectbox(
@@ -313,5 +305,14 @@ with col1:
 with col2:
     for lbl, adr in metrics_col2.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
+
+# Add the dynamic CTA at the bottom of the results
+st.markdown("---")
+co2_reduction = get_value("E9") or 0.0
+st.markdown(
+    f"Estimated CO₂ reduction: **{co2_reduction:,.2f}**. "
+    "Would you like to know the exact decarb and in-depth details for your vessel? "
+    "[Click here](https://dk2advisor.com/getintouch)"
+)
 
 #st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
