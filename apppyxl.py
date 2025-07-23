@@ -36,6 +36,9 @@ wb, ev = load_model(EXCEL_PATH)
 ship_sheet   = wb["Ship Estimator"]
 lookup_sheet = wb["LookupTables"]
 
+# Define fuel_options globally here, as it's static and needed in calculate_fallback
+fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
+
 # ── Helper functions ───────────────────────────────────────────────────────
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
@@ -241,7 +244,6 @@ with st.sidebar.form(key="estimator_form"):
     )
 
     # Fuel type dropdown
-    fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
     current_fuel = ship_sheet["B19"].value
     fuel_type = st.selectbox(
         "Default SEA Fuel", fuel_options,
