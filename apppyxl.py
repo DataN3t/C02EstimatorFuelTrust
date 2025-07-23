@@ -173,7 +173,7 @@ def get_range_values(range_name):
     return values
 
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
-st.sidebar.header("Adjust Estimator Inputs")
+st.sidebar.header("Edit your Estimator Inputs here:")
 
 # Use a form to batch inputs and update only on refresh button
 with st.sidebar.form(key="estimator_form"):
@@ -311,8 +311,8 @@ st.markdown("---")
 co2_reduction = get_value("E9") or 0.0
 st.markdown("""
 <div style="text-align: center; background-color: #e6f7ff; padding: 20px; border-radius: 10px; border: 1px solid #91d5ff;">
-<h2 style="color: #1890ff;">Estimated CO₂ Reduction: <strong>{co2_reduction:,.2f} MT</strong></h2>
-<p style="font-size: 18px;">Unlock precise decarbonization strategies and in-depth insights tailored for your vessels.</p>
+<h2 style="color: #1890ff;">Estimated CO₂ Reduction per vessel type: <strong>{co2_reduction:,.2f} MT</strong></h2>
+<p style="font-size: 18px;">Unlock the exact decarb and in-depth insights tailored for your vessels.</p>
 <a href="https://dk2advisor.com/getintouch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Get in Touch Today</a>
 </div>
 """.format(co2_reduction=co2_reduction), unsafe_allow_html=True)
