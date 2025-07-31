@@ -24,7 +24,7 @@ if not EXCEL_PATH.exists():
     st.stop()
 
 # ── Load workbook + evaluator (cached) ─────────────────────────────────────
-@st.cache_resource(show_spinner="Loading Excel model…")
+@st.cache_resource(show_spinner="Loading C02 model…")
 def load_model(path: Path):
     wb = load_workbook(path, data_only=True, keep_links=False)
     mc = ModelCompiler()
@@ -326,4 +326,3 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
-
