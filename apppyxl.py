@@ -1,4 +1,3 @@
-# app_openpyxl.py
 """
 Streamlit CO₂ Estimator – cloud-ready
 • openpyxl  → loads workbook (.xlsx)
@@ -12,6 +11,7 @@ from openpyxl import load_workbook
 from xlcalculator import ModelCompiler, Evaluator
 import requests
 from bs4 import BeautifulSoup
+import html  # NEW: For HTML escaping
 
 # ── Streamlit config ───────────────────────────────────────────────────────
 st.set_page_config(page_title="FuelTrust CO₂ Ship Estimator", layout="wide")
@@ -306,17 +306,24 @@ with col2:
     for lbl, adr in metrics_col2.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
+# ── Safe HTML Escaping for Markdown Block ───────────────────────────────────
+def safe_html(s):
+    return html.escape(str(s))
+
 # Add the dynamic CTA at the bottom of the results
 st.markdown("---")
 co2e_reduction = get_value("E15") or 0.0
 co2e_reduction_estimate = get_value("E14") or 0.0
+
 st.markdown("""
 <div style="text-align: center; background-color: #e6f7ff; padding: 20px; border-radius: 10px; border: 1px solid #91d5ff;">
-<h2 style="color: #008000;">Estimated FuelTrust CO₂e Reduction Per Vessel Type: <strong>{co2e_reduction:,.2f} MT</strong></h2>
-<h2 style="color: #008000;">Measured CO2e Estimate For Floras CO2e-Offset Calculator Below: <strong>{co2e_reduction_estimate:,.2f} MT</strong></h2>
+<h2 style="color: #008000;">Estimated FuelTrust CO₂e Reduction Per Vessel Type: <strong>{co2e_reduction} MT</strong></h2>
+<h2 style="color: #008000;">Measured CO2e Estimate For Floras CO2e-Offset Calculator Below: <strong>{co2e_reduction_estimate} MT</strong></h2>
 <p style="font-size: 18px;">Unlock the exact decarb and in-depth insights tailored for your vessels.</p>
 <a href="https://www.dk2advisor.com/get-in-touch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Get in Touch Today</a>
 </div>
-""".format(co2e_reduction=co2e_reduction, co2e_reduction_estimate=co2e_reduction_estimate), unsafe_allow_html=True)
+""".format(
+    co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
+    co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
+), unsafe_allow_html=True)
 
-#st.info("📌 Excel charts are removed in this version. Replace with Streamlit charts if needed.")
