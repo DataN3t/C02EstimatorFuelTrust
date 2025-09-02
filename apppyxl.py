@@ -6,12 +6,21 @@ Streamlit CO₂ Estimator – cloud-ready
 
 # ── Imports ────────────────────────────────────────────────────────────────
 from pathlib import Path
+import os, re, json
 import streamlit as st
+import streamlit.components.v1 as components
 from openpyxl import load_workbook
 from xlcalculator import ModelCompiler, Evaluator
 import requests
 from bs4 import BeautifulSoup
-import html  # NEW: For HTML escaping
+import html  # For HTML escaping
+from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone
+try:
+    from zoneinfo import ZoneInfo  # py>=3.9
+except Exception:
+    from backports.zoneinfo import ZoneInfo  # py<3.9
+from typing import List, Dict, Optional
 
 # ── Streamlit config ───────────────────────────────────────────────────────
 st.set_page_config(page_title="FuelTrust CO₂ Ship Estimator", layout="wide")
@@ -172,6 +181,112 @@ def get_range_values(range_name):
                 values.append(cell.value)
     return values
 
+# ───────────────────────────────────────────────────────────────────────────
+# EUA 3‑MONTH FORECAST TICKER (Vertis)
+# ───────────────────────────────────────────────────────────────────────────
+VERTIS_API_URL = "https://myvertis.com/mvapi/prices/"
+
+# Common ways a 3‑month EUA could be named in product_name
+EUA_3M_PATTERNS = [
+    r"\beua\b.*\b3m\b",
+    r"\beua-?3m\b",
+    r"\beua\b.*\b3[-\s]?month(s)?\b",
+    r"\beua\b.*\bq\+?1\b",
+]
+EUA_FALLBACK_PATTERNS = [r"^\s*eua\s*$", r"^\s*eua\b"]
+
+CURRENCY_SYMBOLS = {"EUR": "€", "GBP": "£", "USD": "$"}
+
+def get_vertis_token() -> Optional[str]:
+    # Hardcoded Vertis API token as requested.
+    VERTIS_API_TOKEN = "95ddbff0db89ee2fc7561899847eec35561a8651"
+    return VERTIS_API_TOKEN
+
+@st.cache_data(ttl=600)
+def fetch_vertis_prices(token: str, timeout: int = 15) -> List[Dict]:
+    headers = {"Authorization": f"Token {token}"}
+    params = {"format": "json"}
+    resp = requests.get(VERTIS_API_URL, headers=headers, params=params, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, list):
+        raise ValueError(f"Unexpected response shape: {type(data)}")
+    return data
+
+def _match_first(items: List[Dict], patterns: List[str]) -> Optional[Dict]:
+    for pat in patterns:
+        rx = re.compile(pat, flags=re.IGNORECASE)
+        for it in items:
+            name = str(it.get("product_name", "")).strip()
+            if rx.search(name):
+                return it
+    return None
+
+def pick_eua_3m_item(items: List[Dict]) -> Optional[Dict]:
+    it = _match_first(items, EUA_3M_PATTERNS)
+    if it:
+        return it
+    return _match_first(items, EUA_FALLBACK_PATTERNS)
+
+def _fmt_price(p, currency_code: str) -> str:
+    try:
+        d = Decimal(str(p))
+        q = d.quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError):
+        return f"{p} {currency_code or ''}".strip()
+    sym = CURRENCY_SYMBOLS.get(currency_code or "", "")
+    return f"{sym}{q}" if sym else f"{q} {currency_code}".strip()
+
+def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month Forecast") -> str:
+    """Return a small, clean HTML card for st.components.v1.html."""
+    if not item:
+        card_html = """
+        <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+                    width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
+                    border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month Forecast</div>
+          <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+            Not found in the API response. Check product naming or token access.
+          </div>
+        </div>
+        """
+        return card_html
+
+    name = str(item.get("product_name", "EUA 3M")).strip()
+    price = item.get("price")
+    currency = str(item.get("currency", "")).strip()
+    updated_at_raw = str(item.get("updated_at", "")).strip()
+
+    # Best-effort timestamp prettifier to Europe/Berlin
+    pretty_time = updated_at_raw
+    try:
+        dt = datetime.fromisoformat(updated_at_raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        pretty_time = dt.astimezone(ZoneInfo("Europe/Berlin")).strftime("%d %B %Y %H:%M %Z")
+    except Exception:
+        pass
+
+    price_str = _fmt_price(price, currency)
+
+    card_html = f"""
+    <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+                width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
+                border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div style="font-weight: 600; font-size: 15px; color: #111827;">{html.escape(title)}</div>
+        <div style="font-size: 12px; color: #6b7280;">{html.escape(pretty_time)}</div>
+      </div>
+      <div style="margin-top: 6px; font-size: 28px; font-weight: 700; letter-spacing:-0.01em; color: #111827;">
+        {html.escape(price_str)}
+      </div>
+      <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">
+        {html.escape(name)} • Currency: {html.escape(currency or '—')}
+      </div>
+    </div>
+    """
+    return card_html
+
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
 
@@ -255,7 +370,7 @@ with st.sidebar.form(key="estimator_form"):
     if new_fraud != fraud_pct:
         set_value("B23", new_fraud / 100)
 
-    # ── Live EUA price ─────────────────────────────────────────────────────────
+    # ── Live EUA price (spot) from EEX ───────────────────────────────────────
     def get_live_eua_price():
         try:
             url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
@@ -301,6 +416,34 @@ metrics_col2 = {
 with col1:
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
+
+    # ── NEW: EUA 3‑Month Forecast Ticker (Vertis) in the red-circled area ──
+    token = get_vertis_token()
+    if token:
+        try:
+            prices = fetch_vertis_prices(token)
+            item = pick_eua_3m_item(prices)
+            card_html = build_eua_ticker_html(item, title="EUA 3‑Month (Forward)")
+            # Render the card neatly under the left metric column
+            components.html(card_html, height=140)
+            # Optional: apply to current EUA price (B26)
+            try:
+                ticker_price = float(Decimal(str(item.get("price")))) if item and item.get("price") is not None else None
+            except Exception:
+                ticker_price = None
+            if ticker_price is not None:
+                if st.button("Use 3‑Month price for EUA Price (€)"):
+                    set_value("B26", ticker_price)
+                    st.success(f"Updated EUA Price (€) to {ticker_price:,.2f} from Vertis 3‑Month.")
+                    st.experimental_rerun()
+        except requests.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            msg = f"Vertis ticker error ({status}). Check token/access."
+            st.info(msg)
+        except Exception as e:
+            st.info(f"Vertis ticker unavailable: {e}")
+    else:
+        st.info("Add your Vertis API token to st.secrets['VERTIS_API_TOKEN'] (or env var) to enable the EUA 3‑Month ticker.")
 
 with col2:
     for lbl, adr in metrics_col2.items():
