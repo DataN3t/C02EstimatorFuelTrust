@@ -157,7 +157,7 @@ def get_range_values(range_name):
 # ───────────────────────────────────────────────────────────────────────────
 VERTIS_API_URL = "https://myvertis.com/mvapi/prices/"
 
-# keep-it-simple token (your choice earlier)
+# keep-it-simple token style
 def get_vertis_token() -> str:
     return os.getenv("VERTIS_API_TOKEN", "95ddbff0db89ee2fc7561899847eec35561a8651")
 
@@ -171,7 +171,6 @@ EUA_FALLBACK_PATTERNS = [r"^\s*eua\s*$", r"^\s*eua\b"]
 CURRENCY_SYMBOLS = {"EUR": "€", "GBP": "£", "USD": "$"}
 
 def fetch_vertis_prices(token: str, timeout: int = 15) -> List[Dict]:
-    # No cache → always fresh on rerun
     headers = {"Authorization": f"Token {token}"}
     params = {"format": "json"}
     resp = requests.get(VERTIS_API_URL, headers=headers, params=params, timeout=timeout)
@@ -210,9 +209,7 @@ def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month (For
                     width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
                     border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
           <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month (Forward)</div>
-          <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
-            Not found in the API response. Check product naming or access.
-          </div>
+          <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">Not found in API response.</div>
         </div>
         """
     name = str(item.get("product_name", "EUA 3M")).strip()
@@ -256,7 +253,6 @@ def get_live_eua_price():
         return None
 
 # ── Auto-apply EUA price BEFORE showing the sidebar ─────────────────────────
-# NEW: On each run, try Vertis 3M; if missing, fall back to EEX spot; write to B26.
 autofill_source = None
 vertis_item = None
 ticker_price = None
@@ -268,7 +264,7 @@ if token and token != "YOUR_VERTIS_TOKEN_HERE":
         vertis_item = pick_eua_3m_item(prices)
         if vertis_item and vertis_item.get("price") is not None:
             ticker_price = float(Decimal(str(vertis_item["price"])))
-            set_value("B26", ticker_price)          # ← Auto-fill workbook now
+            set_value("B26", ticker_price)
             autofill_source = "Vertis 3‑Month"
     except Exception:
         pass
@@ -279,7 +275,6 @@ if ticker_price is None:
         set_value("B26", float(lp))
         autofill_source = "EEX Spot"
 
-# Absolute last-resort default if both APIs fail and B26 is empty
 if get_value("B26") is None:
     set_value("B26", 67.6)
 
@@ -310,7 +305,7 @@ with st.sidebar.form(key="estimator_form"):
                     set_value(cell, new_val)
         set_value("B18", calculate_fallback("B18"))
 
-    # Numeric inputs
+    # Numeric inputs — now with step=1.0
     num_inputs = {
         "B7": "Average nm / SEA Day",
         "B8": "Average nm / PORT Day",
@@ -322,13 +317,13 @@ with st.sidebar.form(key="estimator_form"):
     }
     for cell, label in num_inputs.items():
         default_val = get_value(cell) or 0.0
-        new_val = st.number_input(label, value=float(default_val))
+        new_val = st.number_input(label, value=float(default_val), step=1.0)
         if new_val != default_val:
             set_value(cell, new_val)
             if cell in ["B7", "B8", "B16", "B17"]:
                 set_value("B18", calculate_fallback("B18"))
 
-    # Percentage sliders
+    # Percentage sliders (unchanged)
     slider_inputs = {
         "B12": "% Voyages EU-EU",
         "B13": "% In/Out EU",
@@ -349,20 +344,20 @@ with st.sidebar.form(key="estimator_form"):
     if fuel_type != current_fuel:
         set_value("B19", fuel_type)
 
-    # Avg CO₂ overage & fraud
+    # Avg CO₂ overage & fraud — explicit step=1
     co2_over_pct = int((get_value("B21") or 0) * 100)
-    new_co2_over = st.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0)
+    new_co2_over = st.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0, step=1)
     if new_co2_over != co2_over_pct:
         set_value("B21", new_co2_over / 100)
 
     fraud_pct = int((get_value("B23") or 0) * 100)
-    new_fraud = st.number_input("Avg Fraud (%)", value=fraud_pct, min_value=0)
+    new_fraud = st.number_input("Avg Fraud (%)", value=fraud_pct, min_value=0, step=1)
     if new_fraud != fraud_pct:
         set_value("B23", new_fraud / 100)
 
-    # UPDATED: Current EUA Price defaults to the value we already wrote to B26
+    # Current EUA Price (€) — explicit step=1.0 so +/- changes the integer part
     sidebar_default = float(get_value("B26") or 0.0)
-    sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_default)
+    sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_default, step=1.0)
     if sidebar_price != get_value("B26"):
         set_value("B26", sidebar_price)
 
@@ -399,7 +394,7 @@ metrics_col2 = {
 with col1:
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
-    # Render the Vertis ticker card (no button)
+    # Ticker card (no button)
     card_html = build_eua_ticker_html(vertis_item, title="EUA 3‑Month (Forward)")
     components.html(card_html, height=140)
 
@@ -426,4 +421,3 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
-
