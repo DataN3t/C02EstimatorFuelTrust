@@ -6,20 +6,16 @@ Streamlit CO₂ Estimator – cloud-ready
 
 # ── Imports ────────────────────────────────────────────────────────────────
 from pathlib import Path
-import os, re, json
+import os, re, json, html
 import streamlit as st
 import streamlit.components.v1 as components
 from openpyxl import load_workbook
 from xlcalculator import ModelCompiler, Evaluator
 import requests
 from bs4 import BeautifulSoup
-import html  # For HTML escaping
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
-try:
-    from zoneinfo import ZoneInfo  # py>=3.9
-except Exception:
-    from backports.zoneinfo import ZoneInfo  # py<3.9
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Optional
 
 # ── Streamlit config ───────────────────────────────────────────────────────
@@ -48,11 +44,10 @@ lookup_sheet = wb["LookupTables"]
 # Define fuel_options globally here, as it's static and needed in calculate_fallback
 fuel_options = [row[0].value for row in lookup_sheet["A43:A64"] if row[0].value]
 
-# ── Helper functions ───────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 xl_addr = lambda sheet, cell: f"'{sheet}'!{cell.upper()}"
 
 def _flatten(val):
-    """Convert [220] or [[220]] → 220 so widgets get a scalar."""
     while isinstance(val, list) and len(val) == 1:
         val = val[0]
     return val
@@ -62,15 +57,9 @@ def set_value(cell, value):
     try:
         ev.set_cell_value(xl_addr("Ship Estimator", cell), value)
     except Exception:
-        pass  # evaluator may not handle ranges; ignore
+        pass
 
 def get_value(cell):
-    """
-    1) Try xlcalculator (live).
-    2) Flatten 1-element lists.
-    3) If fail or non-numeric, use Python fallback calc.
-    4) Else cached value.
-    """
     try:
         val = ev.evaluate(xl_addr("Ship Estimator", cell))
         val = _flatten(val)
@@ -78,18 +67,14 @@ def get_value(cell):
             return val
     except Exception:
         pass
-    # Fallback to Python calc for key cells
     val = calculate_fallback(cell)
     if val is not None:
-        set_value(cell, val)  # Update sheet with calculated value for chaining
+        set_value(cell, val)
         return val
-    # Final fallback to cached
     cached = ship_sheet[cell].value
     return cached if isinstance(cached, (int, float)) else None
 
 def calculate_fallback(cell):
-    """Python mimic of Excel formulas for outputs if evaluator fails."""
-    # Fetch raw values directly to avoid recursion, with safe float conversion
     def safe_float(cell_key, sheet=ship_sheet):
         val = sheet[cell_key].value
         try:
@@ -102,64 +87,51 @@ def calculate_fallback(cell):
     total_days = sea_days + port_days
     if total_days == 0:
         return None
-    if cell == "B18":  # Annual AVG NM = SEA DAYS * Avg nm / SEA Day + PORT DAYS * Avg nm / PORT day
+    if cell == "B18":
         nm_sea = safe_float("B7")
         nm_port = safe_float("B8")
-        val = (sea_days * nm_sea) + (port_days * nm_port)
-        return val
-    if cell == "E6":  # Average Daily Fuel Use (MT) = (SEA Fuel * SEA DAYS + PORT Fuel * PORT DAYS) / total_days
+        return (sea_days * nm_sea) + (port_days * nm_port)
+    if cell == "E6":
         fuel_sea = safe_float("B10")
         fuel_port = safe_float("B11")
-        val = (fuel_sea * sea_days + fuel_port * port_days) / total_days
-        return val
-    if cell == "E7":  # Annex II Emissions CO2 = Total fuel * Cf (from fuel type)
+        return (fuel_sea * sea_days + fuel_port * port_days) / total_days
+    if cell == "E7":
         fuel_type = ship_sheet["B19"].value
         cf_row = fuel_options.index(fuel_type) if fuel_type in fuel_options else 0
-        cf = safe_float(f"B{43 + cf_row}", sheet=lookup_sheet)  # Cf from LookupTables B43+
+        cf = safe_float(f"B{43 + cf_row}", sheet=lookup_sheet)
         total_fuel = (safe_float("B10") * sea_days + safe_float("B11") * port_days)
-        val = total_fuel * cf
-        return val
-    if cell == "E8":  # Measured CO2 Estimate = E7 * (1 - B21)
+        return total_fuel * cf
+    if cell == "E8":
         co2_over = safe_float("B21")
-        val = (get_value("E7") or 0) * (1 - co2_over)
-        return val
-    if cell == "E9":  # CO2 Reduction = E7 - E8
-        val = (get_value("E7") or 0) - (get_value("E8") or 0)
-        return val
-    if cell == "E10":  # EU CO2 = E7 * (B12 + B13 * 0.5)
+        return (get_value("E7") or 0) * (1 - co2_over)
+    if cell == "E9":
+        return (get_value("E7") or 0) - (get_value("E8") or 0)
+    if cell == "E10":
         eu_eu_pct = safe_float("B12")
         in_out_pct = safe_float("B13")
-        val = (get_value("E7") or 0) * (eu_eu_pct + in_out_pct * 0.5)
-        return val
-    if cell == "E11":  # EU ETS (2024) Liability = E10 * B26 * 0.4
+        return (get_value("E7") or 0) * (eu_eu_pct + in_out_pct * 0.5)
+    if cell == "E11":
         eua_price = safe_float("B26")
-        val = (get_value("E10") or 0) * eua_price * 0.4
-        return val
-    if cell == "E12":  # EU Eligible CO2 Reductions = E9 * (B12 + B13 * 0.5)
+        return (get_value("E10") or 0) * eua_price * 0.4
+    if cell == "E12":
         eu_eu_pct = safe_float("B12")
         in_out_pct = safe_float("B13")
-        val = (get_value("E9") or 0) * (eu_eu_pct + in_out_pct * 0.5)
-        return val
-    if cell == "E13":  # Annex-II CO2 (2025→) = E7 * 1.50419
-        val = (get_value("E7") or 0) * 1.50419
-        return val
-    if cell == "E14":  # Measured CO2e Estimate = E13 * (1 - 0.0412)
-        val = (get_value("E13") or 0) * (1 - 0.0412)
-        return val
-    if cell == "E15":  # Measured CO2e Reduction = E13 - E14
-        val = (get_value("E13") or 0) - (get_value("E14") or 0)
-        return val
-    if cell in ["E16", "E17", "E18", "E19"]:  # Savings € 2025-2028 = E15 * EUA price * liability %
+        return (get_value("E9") or 0) * (eu_eu_pct + in_out_pct * 0.5)
+    if cell == "E13":
+        return (get_value("E7") or 0) * 1.50419
+    if cell == "E14":
+        return (get_value("E13") or 0) * (1 - 0.0412)
+    if cell == "E15":
+        return (get_value("E13") or 0) - (get_value("E14") or 0)
+    if cell in ["E16", "E17", "E18", "E19"]:
         year = {"E16": 2025, "E17": 2026, "E18": 2027, "E19": 2028}[cell]
         liability_pct = [0.4, 0.7, 1.0, 1.0][year - 2025]
         eua = safe_float("B26")
-        val = (get_value("E15") or 0) * eua * liability_pct
-        return val
-    if cell == "E21":  # Avg Fraud Savings / yr = E7 * B23 * B26
+        return (get_value("E15") or 0) * eua * liability_pct
+    if cell == "E21":
         fraud_pct = safe_float("B23")
         eua = safe_float("B26")
-        val = (get_value("E7") or 0) * fraud_pct * eua
-        return val
+        return (get_value("E7") or 0) * fraud_pct * eua
     return None
 
 def safe_metric(label, value, prefix=""):
@@ -169,7 +141,6 @@ def safe_metric(label, value, prefix=""):
         st.metric(label, "–")
 
 def get_range_values(range_name):
-    """Fetch values from a named range as a flat list (assuming column/row)."""
     if range_name not in wb.defined_names:
         return None
     defined = wb.defined_names[range_name]
@@ -182,11 +153,14 @@ def get_range_values(range_name):
     return values
 
 # ───────────────────────────────────────────────────────────────────────────
-# EUA 3‑MONTH FORECAST TICKER (Vertis)
+# EUA 3‑MONTH FORECAST (Vertis) — fetch + render
 # ───────────────────────────────────────────────────────────────────────────
 VERTIS_API_URL = "https://myvertis.com/mvapi/prices/"
 
-# Common ways a 3‑month EUA could be named in product_name
+# keep-it-simple token (your choice earlier)
+def get_vertis_token() -> str:
+    return os.getenv("VERTIS_API_TOKEN", "YOUR_VERTIS_TOKEN_HERE")
+
 EUA_3M_PATTERNS = [
     r"\beua\b.*\b3m\b",
     r"\beua-?3m\b",
@@ -194,16 +168,10 @@ EUA_3M_PATTERNS = [
     r"\beua\b.*\bq\+?1\b",
 ]
 EUA_FALLBACK_PATTERNS = [r"^\s*eua\s*$", r"^\s*eua\b"]
-
 CURRENCY_SYMBOLS = {"EUR": "€", "GBP": "£", "USD": "$"}
 
-def get_vertis_token() -> Optional[str]:
-    # Hardcoded Vertis API token as requested.
-    VERTIS_API_TOKEN = "95ddbff0db89ee2fc7561899847eec35561a8651"
-    return VERTIS_API_TOKEN
-
-@st.cache_data(ttl=600)
 def fetch_vertis_prices(token: str, timeout: int = 15) -> List[Dict]:
+    # No cache → always fresh on rerun
     headers = {"Authorization": f"Token {token}"}
     params = {"format": "json"}
     resp = requests.get(VERTIS_API_URL, headers=headers, params=params, timeout=timeout)
@@ -224,9 +192,7 @@ def _match_first(items: List[Dict], patterns: List[str]) -> Optional[Dict]:
 
 def pick_eua_3m_item(items: List[Dict]) -> Optional[Dict]:
     it = _match_first(items, EUA_3M_PATTERNS)
-    if it:
-        return it
-    return _match_first(items, EUA_FALLBACK_PATTERNS)
+    return it or _match_first(items, EUA_FALLBACK_PATTERNS)
 
 def _fmt_price(p, currency_code: str) -> str:
     try:
@@ -237,27 +203,22 @@ def _fmt_price(p, currency_code: str) -> str:
     sym = CURRENCY_SYMBOLS.get(currency_code or "", "")
     return f"{sym}{q}" if sym else f"{q} {currency_code}".strip()
 
-def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month Forecast") -> str:
-    """Return a small, clean HTML card for st.components.v1.html."""
+def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month (Forward)") -> str:
     if not item:
-        card_html = """
+        return """
         <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
                     width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
                     border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month Forecast</div>
+          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month (Forward)</div>
           <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
-            Not found in the API response. Check product naming or token access.
+            Not found in the API response. Check product naming or access.
           </div>
         </div>
         """
-        return card_html
-
     name = str(item.get("product_name", "EUA 3M")).strip()
     price = item.get("price")
     currency = str(item.get("currency", "")).strip()
     updated_at_raw = str(item.get("updated_at", "")).strip()
-
-    # Best-effort timestamp prettifier to Europe/Berlin
     pretty_time = updated_at_raw
     try:
         dt = datetime.fromisoformat(updated_at_raw)
@@ -266,10 +227,8 @@ def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month Fore
         pretty_time = dt.astimezone(ZoneInfo("Europe/Berlin")).strftime("%d %B %Y %H:%M %Z")
     except Exception:
         pass
-
     price_str = _fmt_price(price, currency)
-
-    card_html = f"""
+    return f"""
     <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
                 width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
                 border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
@@ -285,12 +244,48 @@ def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month Fore
       </div>
     </div>
     """
-    return card_html
+
+# ── EEX spot (fallback) ─────────────────────────────────────────────────────
+def get_live_eua_price():
+    try:
+        url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
+        soup = BeautifulSoup(requests.get(url, timeout=8).text, "html.parser")
+        price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
+        return float(price_text.replace(",", "."))
+    except Exception:
+        return None
+
+# ── Auto-apply EUA price BEFORE showing the sidebar ─────────────────────────
+# NEW: On each run, try Vertis 3M; if missing, fall back to EEX spot; write to B26.
+autofill_source = None
+vertis_item = None
+ticker_price = None
+
+token = get_vertis_token()
+if token and token != "YOUR_VERTIS_TOKEN_HERE":
+    try:
+        prices = fetch_vertis_prices(token)
+        vertis_item = pick_eua_3m_item(prices)
+        if vertis_item and vertis_item.get("price") is not None:
+            ticker_price = float(Decimal(str(vertis_item["price"])))
+            set_value("B26", ticker_price)          # ← Auto-fill workbook now
+            autofill_source = "Vertis 3‑Month"
+    except Exception:
+        pass
+
+if ticker_price is None:
+    lp = get_live_eua_price()
+    if lp is not None:
+        set_value("B26", float(lp))
+        autofill_source = "EEX Spot"
+
+# Absolute last-resort default if both APIs fail and B26 is empty
+if get_value("B26") is None:
+    set_value("B26", 67.6)
 
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
 
-# Use a form to batch inputs and update only on refresh button
 with st.sidebar.form(key="estimator_form"):
     # Ship type dropdown
     ship_type_list = [c.value for c in lookup_sheet["A"][1:39] if c.value]
@@ -301,14 +296,10 @@ with st.sidebar.form(key="estimator_form"):
     )
     if selected_ship_type != current_ship_type:
         set_value("B6", selected_ship_type)
-        # Update dependent cells via Python lookup (mimics INDEX/MATCH)
         dependents = {
-            "B7": "SeaDayNM",   # Average nm / SEA Day
-            "B8": "PortDayNM",  # Average nm / PORT Day
-            "B10": "SeaDayMT",  # Avg SEA Fuel use (MT)
-            "B11": "PortDayMT", # Avg PORT Fuel use (MT)
-            "B16": "SeaDays",   # SEA DAYS
-            "B17": "PortDays",  # PORT DAYS
+            "B7": "SeaDayNM", "B8": "PortDayNM",
+            "B10": "SeaDayMT", "B11": "PortDayMT",
+            "B16": "SeaDays",  "B17": "PortDays",
         }
         ship_index = ship_type_list.index(selected_ship_type)
         for cell, range_name in dependents.items():
@@ -317,10 +308,9 @@ with st.sidebar.form(key="estimator_form"):
                 new_val = values[ship_index]
                 if isinstance(new_val, (int, float)):
                     set_value(cell, new_val)
-        # Trigger fallback for B18
         set_value("B18", calculate_fallback("B18"))
 
-    # Numeric inputs - add on_change to trigger recalcs
+    # Numeric inputs
     num_inputs = {
         "B7": "Average nm / SEA Day",
         "B8": "Average nm / PORT Day",
@@ -335,7 +325,7 @@ with st.sidebar.form(key="estimator_form"):
         new_val = st.number_input(label, value=float(default_val))
         if new_val != default_val:
             set_value(cell, new_val)
-            if cell in ["B7", "B8", "B16", "B17"]:  # Recalc B18 if these change
+            if cell in ["B7", "B8", "B16", "B17"]:
                 set_value("B18", calculate_fallback("B18"))
 
     # Percentage sliders
@@ -353,13 +343,13 @@ with st.sidebar.form(key="estimator_form"):
     # Fuel type dropdown
     current_fuel = ship_sheet["B19"].value
     fuel_type = st.selectbox(
-        "Default SEA Fuel", fuel_options,
+        "Default SEA Fuel", [*fuel_options],
         index=fuel_options.index(current_fuel) if current_fuel in fuel_options else 0,
     )
     if fuel_type != current_fuel:
         set_value("B19", fuel_type)
 
-    # CO₂ overage and fraud
+    # Avg CO₂ overage & fraud
     co2_over_pct = int((get_value("B21") or 0) * 100)
     new_co2_over = st.number_input("Avg CO₂ Overage (%)", value=co2_over_pct, min_value=0)
     if new_co2_over != co2_over_pct:
@@ -370,29 +360,22 @@ with st.sidebar.form(key="estimator_form"):
     if new_fraud != fraud_pct:
         set_value("B23", new_fraud / 100)
 
-    # ── Live EUA price (spot) from EEX ───────────────────────────────────────
-    def get_live_eua_price():
-        try:
-            url = "https://www.eex.com/en/market-data/environmental-markets/spot-market/european-emission-allowances"
-            soup = BeautifulSoup(requests.get(url, timeout=8).text, "html.parser")
-            price_text = soup.find("td", string="2021-2030").find_next("td").text.strip()
-            return float(price_text.replace(",", "."))
-        except Exception:
-            return None
-
-    live_price  = get_live_eua_price()
-    sidebar_val = float(live_price or get_value("B26") or 67.6)
-    sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_val)
+    # UPDATED: Current EUA Price defaults to the value we already wrote to B26
+    sidebar_default = float(get_value("B26") or 0.0)
+    sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_default)
     if sidebar_price != get_value("B26"):
         set_value("B26", sidebar_price)
 
-    # Refresh button as form submit
+    if autofill_source:
+        st.caption(f"Auto-filled from {autofill_source}")
+
     refresh_button = st.form_submit_button("Refresh")
 
 # ── Estimator output ───────────────────────────────────────────────────────
 st.subheader("Estimator Results:")
 
 col1, col2 = st.columns(2)
+
 metrics_col1 = {
     "Average Daily Fuel Use (MT)": "E6",
     "Annex II Emissions CO₂": "E7",
@@ -416,44 +399,18 @@ metrics_col2 = {
 with col1:
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
-
-    # ── NEW: EUA 3‑Month Forecast Ticker (Vertis) in the red-circled area ──
-    token = get_vertis_token()
-    if token:
-        try:
-            prices = fetch_vertis_prices(token)
-            item = pick_eua_3m_item(prices)
-            card_html = build_eua_ticker_html(item, title="EUA 3‑Month (Forward)")
-            # Render the card neatly under the left metric column
-            components.html(card_html, height=140)
-            # Optional: apply to current EUA price (B26)
-            try:
-                ticker_price = float(Decimal(str(item.get("price")))) if item and item.get("price") is not None else None
-            except Exception:
-                ticker_price = None
-            if ticker_price is not None:
-                if st.button("Use 3‑Month price for EUA Price (€)"):
-                    set_value("B26", ticker_price)
-                    st.success(f"Updated EUA Price (€) to {ticker_price:,.2f} from Vertis 3‑Month.")
-                    st.experimental_rerun()
-        except requests.HTTPError as e:
-            status = getattr(e.response, "status_code", None)
-            msg = f"Vertis ticker error ({status}). Check token/access."
-            st.info(msg)
-        except Exception as e:
-            st.info(f"Vertis ticker unavailable: {e}")
-    else:
-        st.info("Add your Vertis API token to st.secrets['VERTIS_API_TOKEN'] (or env var) to enable the EUA 3‑Month ticker.")
+    # Render the Vertis ticker card (no button)
+    card_html = build_eua_ticker_html(vertis_item, title="EUA 3‑Month (Forward)")
+    components.html(card_html, height=140)
 
 with col2:
     for lbl, adr in metrics_col2.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
-# ── Safe HTML Escaping for Markdown Block ───────────────────────────────────
+# ── Bottom CTA ─────────────────────────────────────────────────────────────
 def safe_html(s):
     return html.escape(str(s))
 
-# Add the dynamic CTA at the bottom of the results
 st.markdown("---")
 co2e_reduction = get_value("E15") or 0.0
 co2e_reduction_estimate = get_value("E14") or 0.0
