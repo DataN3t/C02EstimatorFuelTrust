@@ -388,7 +388,7 @@ metrics_col2 = {
     "SAVINGS € 2026": "E17",
     "SAVINGS € 2027": "E18",
     "SAVINGS € 2028": "E19",
-    "Avg Fraud Savings / yr": "E21",
+    "Avg Fraud Savings / yr in € ": "E21",
 }
 
 with col1:
@@ -421,4 +421,5 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
+
 
