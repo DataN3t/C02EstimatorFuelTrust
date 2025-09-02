@@ -159,7 +159,7 @@ VERTIS_API_URL = "https://myvertis.com/mvapi/prices/"
 
 # keep-it-simple token (your choice earlier)
 def get_vertis_token() -> str:
-    return os.getenv("VERTIS_API_TOKEN", "YOUR_VERTIS_TOKEN_HERE")
+    return os.getenv("VERTIS_API_TOKEN", "95ddbff0db89ee2fc7561899847eec35561a8651")
 
 EUA_3M_PATTERNS = [
     r"\beua\b.*\b3m\b",
@@ -426,3 +426,4 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
+
