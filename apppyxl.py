@@ -202,13 +202,13 @@ def _fmt_price(p, currency_code: str) -> str:
     sym = CURRENCY_SYMBOLS.get(currency_code or "", "")
     return f"{sym}{q}" if sym else f"{q} {currency_code}".strip()
 
-def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month (Forward)") -> str:
+def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month (Forcast)") -> str:
     if not item:
         return """
         <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
                     width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
                     border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month (Forward)</div>
+          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month (Forcast)</div>
           <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">Not found in API response.</div>
         </div>
         """
@@ -395,7 +395,7 @@ with col1:
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
     # Ticker card (no button)
-    card_html = build_eua_ticker_html(vertis_item, title="EUA 3‑Month (Forward)")
+    card_html = build_eua_ticker_html(vertis_item, title="EUA 3‑Month (Forcast)")
     components.html(card_html, height=140)
 
 with col2:
@@ -421,3 +421,4 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
+
