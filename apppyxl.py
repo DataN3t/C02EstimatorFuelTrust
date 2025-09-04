@@ -243,7 +243,7 @@ if token and token != "YOUR_VERTIS_TOKEN_HERE":
             ticker_pretty_time = _pretty_time_iso_to_tz(vertis_item.get("updated_at", ""))
             ticker_product_name = str(vertis_item.get("product_name", "EUA 3M"))
             set_value("B26", ticker_price)  # feed workbook
-            autofill_source = "Vertis 3‑Month"
+            autofill_source = "3‑Month Forecast"
     except Exception:
         pass
 
