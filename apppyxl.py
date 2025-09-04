@@ -8,7 +8,7 @@ Streamlit CO₂ Estimator – cloud-ready
 from pathlib import Path
 import os, re, json, html
 import streamlit as st
-import streamlit.components.v1 as components
+# NOTE: no components import anymore; we render as a metric
 from openpyxl import load_workbook
 from xlcalculator import ModelCompiler, Evaluator
 import requests
@@ -153,7 +153,7 @@ def get_range_values(range_name):
     return values
 
 # ───────────────────────────────────────────────────────────────────────────
-# EUA 3‑MONTH FORECAST (Vertis) — fetch + render
+# EUA 3‑MONTH FORECAST (Vertis) — fetch + parse
 # ───────────────────────────────────────────────────────────────────────────
 VERTIS_API_URL = "https://myvertis.com/mvapi/prices/"
 
@@ -202,45 +202,17 @@ def _fmt_price(p, currency_code: str) -> str:
     sym = CURRENCY_SYMBOLS.get(currency_code or "", "")
     return f"{sym}{q}" if sym else f"{q} {currency_code}".strip()
 
-def build_eua_ticker_html(item: Optional[Dict], title: str = "EUA 3‑Month (Forecast)") -> str:
-    if not item:
-        return """
-        <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-                    width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
-                    border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-          <div style="font-weight: 600; font-size: 15px; color: #111827;">EUA 3‑Month (Forecast)</div>
-          <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">Not found in API response.</div>
-        </div>
-        """
-    name = str(item.get("product_name", "EUA 3M")).strip()
-    price = item.get("price")
-    currency = str(item.get("currency", "")).strip()
-    updated_at_raw = str(item.get("updated_at", "")).strip()
-    pretty_time = updated_at_raw
+def _pretty_time_iso_to_tz(iso_text: str, tz: str = "Europe/Berlin") -> str:
+    s = str(iso_text or "").strip()
+    if not s:
+        return ""
     try:
-        dt = datetime.fromisoformat(updated_at_raw)
+        dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        pretty_time = dt.astimezone(ZoneInfo("Europe/Berlin")).strftime("%d %B %Y %H:%M %Z")
+        return dt.astimezone(ZoneInfo(tz)).strftime("%d %B %Y %H:%M %Z")
     except Exception:
-        pass
-    price_str = _fmt_price(price, currency)
-    return f"""
-    <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-                width: 100%; max-width: 520px; padding: 14px 16px; border: 1px solid #e5e7eb;
-                border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div style="font-weight: 600; font-size: 15px; color: #111827;">{html.escape(title)}</div>
-        <div style="font-size: 12px; color: #6b7280;">{html.escape(pretty_time)}</div>
-      </div>
-      <div style="margin-top: 6px; font-size: 28px; font-weight: 700; letter-spacing:-0.01em; color: #111827;">
-        {html.escape(price_str)}
-      </div>
-      <div style="margin-top: 4px; font-size: 12px; color: #6b7280;">
-        {html.escape(name)} • Currency: {html.escape(currency or '—')}
-      </div>
-    </div>
-    """
+        return s
 
 # ── EEX spot (fallback) ─────────────────────────────────────────────────────
 def get_live_eua_price():
@@ -256,6 +228,9 @@ def get_live_eua_price():
 autofill_source = None
 vertis_item = None
 ticker_price = None
+ticker_currency = "EUR"
+ticker_pretty_time = ""
+ticker_product_name = "EUA"
 
 token = get_vertis_token()
 if token and token != "YOUR_VERTIS_TOKEN_HERE":
@@ -264,7 +239,10 @@ if token and token != "YOUR_VERTIS_TOKEN_HERE":
         vertis_item = pick_eua_3m_item(prices)
         if vertis_item and vertis_item.get("price") is not None:
             ticker_price = float(Decimal(str(vertis_item["price"])))
-            set_value("B26", ticker_price)
+            ticker_currency = str(vertis_item.get("currency", "EUR")).upper() or "EUR"
+            ticker_pretty_time = _pretty_time_iso_to_tz(vertis_item.get("updated_at", ""))
+            ticker_product_name = str(vertis_item.get("product_name", "EUA 3M"))
+            set_value("B26", ticker_price)  # feed workbook
             autofill_source = "Vertis 3‑Month"
     except Exception:
         pass
@@ -272,11 +250,19 @@ if token and token != "YOUR_VERTIS_TOKEN_HERE":
 if ticker_price is None:
     lp = get_live_eua_price()
     if lp is not None:
-        set_value("B26", float(lp))
+        ticker_price = float(lp)
+        ticker_currency = "EUR"
+        ticker_pretty_time = ""  # no reliable timestamp from scrape
+        ticker_product_name = "EUA Spot"
+        set_value("B26", ticker_price)
         autofill_source = "EEX Spot"
 
+# Absolute last-resort default if both APIs fail and B26 is empty
 if get_value("B26") is None:
     set_value("B26", 67.6)
+    ticker_price = float(get_value("B26"))
+    ticker_currency = "EUR"
+    ticker_product_name = "EUA (Default)"
 
 # ── Sidebar – user inputs ──────────────────────────────────────────────────
 st.sidebar.header("Adjust Estimator Inputs")
@@ -305,7 +291,7 @@ with st.sidebar.form(key="estimator_form"):
                     set_value(cell, new_val)
         set_value("B18", calculate_fallback("B18"))
 
-    # Numeric inputs — now with step=1.0
+    # Numeric inputs — step=1.0 so +/- changes the integer part
     num_inputs = {
         "B7": "Average nm / SEA Day",
         "B8": "Average nm / PORT Day",
@@ -355,7 +341,7 @@ with st.sidebar.form(key="estimator_form"):
     if new_fraud != fraud_pct:
         set_value("B23", new_fraud / 100)
 
-    # Current EUA Price (€) — explicit step=1.0 so +/- changes the integer part
+    # Current EUA Price (€) — step=1.0 so +/- changes the integer part
     sidebar_default = float(get_value("B26") or 0.0)
     sidebar_price = st.number_input("Current EUA Price (€)", value=sidebar_default, step=1.0)
     if sidebar_price != get_value("B26"):
@@ -392,11 +378,20 @@ metrics_col2 = {
 }
 
 with col1:
+    # Left metric stack
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
-    # Ticker card (no button)
-    card_html = build_eua_ticker_html(vertis_item, title="EUA 3‑Month (Forecast)")
-    components.html(card_html, height=140)
+
+    # NEW: EUA 3‑Month (Forecast) as a native metric (integrated look)
+    sym = CURRENCY_SYMBOLS.get(ticker_currency, "")
+    prefix = f"{sym}" if sym else (f"{ticker_currency} " if ticker_currency else "")
+    safe_metric("EUA 3‑Month (Forecast)", float(ticker_price or 0.0), prefix)
+    # small caption for context
+    extra_bits = " • ".join(
+        bit for bit in [ticker_product_name, f"Currency: {ticker_currency}" if ticker_currency else "", ticker_pretty_time] if bit
+    )
+    if extra_bits:
+        st.caption(extra_bits)
 
 with col2:
     for lbl, adr in metrics_col2.items():
@@ -421,6 +416,3 @@ st.markdown("""
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
     co2e_reduction_estimate=safe_html(f"{co2e_reduction_estimate:,.2f}")
 ), unsafe_allow_html=True)
-
-
-
