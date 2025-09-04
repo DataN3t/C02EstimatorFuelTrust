@@ -382,16 +382,18 @@ with col1:
     for lbl, adr in metrics_col1.items():
         safe_metric(lbl, get_value(adr), "€ " if "€" in lbl else "")
 
-    # NEW: EUA 3‑Month (Forecast) as a native metric (integrated look)
+    # EUA 3-Month (Forecast) as a native metric
     sym = CURRENCY_SYMBOLS.get(ticker_currency, "")
     prefix = f"{sym}" if sym else (f"{ticker_currency} " if ticker_currency else "")
-    safe_metric("EUA 3‑Month (Forecast)", float(ticker_price or 0.0), prefix)
-    # small caption for context
-    extra_bits = " • ".join(
-        bit for bit in [ticker_product_name, f"Currency: {ticker_currency}" if ticker_currency else "", ticker_pretty_time] if bit
-    )
-    if extra_bits:
-        st.caption(extra_bits)
+    safe_metric("EUA 3-Month (Forecast)", float(ticker_price or 0.0), prefix)
+
+    # NEW: Cleaner caption formatting
+    if ticker_product_name and ticker_currency:
+        caption_text = f"{ticker_product_name}/{ticker_currency}"
+        if ticker_pretty_time:
+            caption_text += f" • Last Updated: {ticker_pretty_time}"
+        st.caption(caption_text)
+
 
 with col2:
     for lbl, adr in metrics_col2.items():
