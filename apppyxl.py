@@ -409,10 +409,21 @@ co2e_reduction_estimate = get_value("E14") or 0.0
 
 st.markdown("""
 <div style="text-align: center; background-color: #e6f7ff; padding: 20px; border-radius: 10px; border: 1px solid #91d5ff;">
-<h2 style="color: #008000;">Estimated FuelTrust CO₂e Reduction Per Vessel Type: <strong>{co2e_reduction} MT</strong></h2>
-<h2 style="color: #008000;">Measured CO2e Estimate For Floras CO2e-Offset Calculator Below: <strong>{co2e_reduction_estimate} MT</strong></h2>
-<p style="font-size: 18px;">Unlock the exact decarb and in-depth insights tailored for your vessels.</p>
-<a href="https://www.dk2advisor.com/get-in-touch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Get in Touch Today</a>
+<h2 style="color: #008000;">
+Estimated FuelTrust CO₂e Reduction Per Vessel Type: <strong>{co2e_reduction} MT</strong>
+</h2>
+
+<h2 style="color: #008000;">
+Enter your CO₂e estimate of <strong>{co2e_reduction_estimate} MT</strong> from your voyage into the Floras calculator below to discover how it can be effectively offset.
+</h2>
+
+<p style="font-size: 18px;">
+Contact us to secure competitive EUA quotes and explore in-depth how FuelTrust can reduce your emissions and enhance your CII ratings.
+</p>
+
+<a href="https://www.dk2advisor.com/get-in-touch" style="background-color: #1890ff; color: white; font-size: 16px; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+Get in Touch Today
+</a>
 </div>
 """.format(
     co2e_reduction=safe_html(f"{co2e_reduction:,.2f}"),
